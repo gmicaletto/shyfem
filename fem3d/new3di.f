@@ -210,7 +210,7 @@ c written on 27.07.88 by ggu   (from sp159f)
 	real dzeta(nkn)
 
 	integer iround
-	real getpar
+	real getpar, ahpar
 	integer inohyd
 	logical bnohyd
 
@@ -233,13 +233,13 @@ c-----------------------------------------------------------------
 	  call system_set_explicit
 	else if( azpar == 1. .and. ampar == 0. ) then
 	  call system_set_explicit
-	else if( shympi_is_parallel() ) then
-	  if( shympi_is_master() ) then
-	    write(6,*) 'system is not solved explicitly'
-	    write(6,*) 'cannot solve semi-implicitly with MPI'
-	    write(6,*) 'az,am: ',azpar,ampar
-	  end if
-	  call shympi_stop('no semi-implicit solution')
+	!else if( shympi_is_parallel() ) then
+	!  if( shympi_is_master() ) then
+	!    write(6,*) 'system is not solved explicitly'
+	!    write(6,*) 'cannot solve semi-implicitly with MPI'
+	!    write(6,*) 'az,am: ',azpar,ampar
+	!  end if
+	  !call shympi_stop('no semi-implicit solution')
 	end if
 
 c-----------------------------------------------------------------
@@ -262,6 +262,7 @@ c copy variables to old time level
 c-----------------------------------------------------------------
 
 	call copy_uvz		!copies uvz to old time level
+
 	call nonhydro_copy	!copies non hydrostatic pressure terms
 	call copy_depth		!copies layer structure
 
@@ -308,6 +309,13 @@ c-----------------------------------------------------------------
         call setzev			!copy znv to zenv
         call setuvd			!set velocities in dry areas
 	call baro2l 			!sets transports in dry areas
+
+        ahpar = getpar('ahpar')
+
+        if(shympi_partition_on_elements() .and. ahpar .gt. 0) then
+          call send_halo(utlnv,nlvdi,nel_global,'ut')
+          call send_halo(vtlnv,nlvdi,nel_global,'vt')
+        end if
 
 	call make_new_depth
 	call check_volume		!checks for negative volume 

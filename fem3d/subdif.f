@@ -463,6 +463,8 @@ c	2	smagorinsky (variable with area and time)
 	use evgeom
 	use levels
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
+        use mod_mpi_io
 
         implicit none
 
@@ -605,7 +607,15 @@ c       ------------------------------------------------------------------
         file = 'rkdiff'
         title = 'horizontal diffusion coef'
         call e2n2d(ve1v,v1v,v2v)
-        call wrnos2d(file,title,v1v)
+
+        if(bmpi) then
+          call rebuild_2d_nodes(v1v,outV1v)
+          if(shympi_is_master().and.shympi_partition_on_elements())then
+          call wrnos2d(file,title,outV1v)
+          end if
+        else
+          call wrnos2d(file,title,v1v)
+        end if
 
 c------------------------------------------------------------------
 c end of routine

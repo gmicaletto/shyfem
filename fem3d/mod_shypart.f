@@ -64,7 +64,7 @@
 	call shympi_get_status_size_internal(size)
 
 	write(6,*) 'shypart initialized: ',my_id,n_threads
-	flush(6)
+	call flush(6)
 
 	end subroutine shypart_init
 
@@ -95,7 +95,6 @@
 
         nkn = nkndi
         nel = neldi
-
 c------------------------------------------------------------------
 c sanity check
 c------------------------------------------------------------------

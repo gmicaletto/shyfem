@@ -14,11 +14,13 @@ module mpi_common_struct
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:,:) :: myieltv
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: numberElements
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: numberNodes
+   INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: procNodes
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: numberLevels
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:,:) :: allNodesAssign
    INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: univocalNodesAssign
+   INTEGER, PUBLIC, ALLOCATABLE, SAVE, DIMENSION(:) :: scatterNodes
 
-   integer, public, save :: maxelements, maxlevelsproc, totalnodes
+   integer,public,save :: maxelements,maxlevelsproc,totalnodes,maxNodes
 
 end module mpi_common_struct
 

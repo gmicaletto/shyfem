@@ -303,7 +303,7 @@
 
     if(ierr .ne. ZOLTAN_OK) then
        write(6,*)'sorry...'
-       call MPI_FINALIZE()
+       call MPI_FINALIZE(ierr)
        stop
     end if
 
@@ -367,7 +367,7 @@
     deallocate(partAssign)
     deallocate(ilhkv)
 
-    if(minNkn .le. 0) then
+    if(minNkn .le. 14) then
       if(my_id .eq. 0) then
         write(6,*)'tried partitioning with',n_threads,' processes'
         write(6,*)'too many processes for the basin, try a smaller number of processes'
@@ -391,10 +391,10 @@
        write(filename,format_string)'part_nodes',n_threads
     end if
 
-       open(unit=1500, file=filename, action='write')
-          write(1500,*),nkndi,neldi,n_threads,what 
-          write(1500,fmt="(i12,i12,i12,i12,i12,i12)"),allPartAssign
-       close(1500)
+      open(unit=1500, file=filename, action='write')
+        write(1500,fmt='(i12,i12,i12,A10)'),nkndi,neldi,n_threads,what
+        write(1500,fmt="(i12,i12,i12,i12,i12,i12)"),allPartAssign
+      close(1500)
     end if
 
     ierr = Zoltan_LB_Free_Part(importGlobalGids, importLocalGids, importProcs, importToPart)

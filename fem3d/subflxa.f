@@ -231,7 +231,10 @@ c******************************************************************
 	integer k,ii
         logical berror
 
-	call n2int(kfluxm,kflux,berror)
+        berror=.false.
+        if(kfluxm .gt. 0) then
+	  call n2int(kfluxm,kflux,berror)
+        end if
 
         if( berror ) then
 		write(6,*) 'error in section FLUX'
@@ -276,6 +279,7 @@ c******************************************************************
 	ns = 0
 	nnode = 0
 
+        if(kfluxm .le. 0) return
 	do while( nextline(kflux,kfluxm,nnode,ifirst,ilast) )
 	  ns = ns + 1
 	  ntotal = ilast - ifirst + 1
@@ -503,6 +507,7 @@ c initializes flux routines finally (wrapper for flx_init)
 
 	implicit none
 
+        if(kfluxm .le. 0) return
 	call flx_init(kfluxm,kflux,nsect,iflux)
 
 	end

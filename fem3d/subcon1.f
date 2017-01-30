@@ -407,7 +407,9 @@ c on return iu = -1 means that no file has been opened and is not written
 
 	use mod_depth
 	use levels
-	use basin, only : nkn,nel,ngr,mbw
+	use basin, only : nkn,nel,ngr,mbw,neldi,nkndi
+        use shympi
+        use mod_mpi_io
 
 	implicit none
 
@@ -454,10 +456,20 @@ c-----------------------------------------------------
 	call nos_set_title(iu,title)
 	call nos_set_date(iu,date,time)
 	call nos_set_femver(iu,femver)
-	call nos_write_header(iu,nkn,nel,nl,nvar,ierr)
-        if(ierr.gt.0) goto 99
-	call nos_write_header2(iu,ilhkv,hlv,hev,ierr)
-        if(ierr.gt.0) goto 99
+        if(bmpi) then
+          call rebuild_nos_header
+          if(shympi_is_master().and.shympi_partition_on_elements())then
+	    call nos_write_header(iu,nkndi,neldi,nlvdi,nvar,ierr)
+            if(ierr.gt.0) goto 99
+	    call nos_write_header2(iu,outIlhkv,hlv,outHev,ierr)
+            if(ierr.gt.0) goto 99
+          end if
+        else
+	  call nos_write_header(iu,nkn,nel,nl,nvar,ierr)
+          if(ierr.gt.0) goto 99
+	  call nos_write_header2(iu,ilhkv,hlv,hev,ierr)
+          if(ierr.gt.0) goto 99
+        end if
 
 c-----------------------------------------------------
 c write informational message to terminal
@@ -501,6 +513,8 @@ c
 c the file must be open, the file will be written unconditionally
 
 	use levels
+        use shympi
+        use mod_mpi_io
 
 	implicit none
 
@@ -526,8 +540,11 @@ c-----------------------------------------------------
 c-----------------------------------------------------
 c write file
 c-----------------------------------------------------
-
-	call nos_write_record(iu,it,ivar,nlvddi,ilhkv,c,ierr)
+        if(shympi_partition_on_elements()) then
+	  call nos_write_record(iu,it,ivar,nlvddi,outIlhkv,c,ierr)
+        else
+	  call nos_write_record(iu,it,ivar,nlvddi,ilhkv,c,ierr)
+        end if
 	if(ierr.gt.0) goto 99
 
 c-----------------------------------------------------
@@ -558,6 +575,7 @@ c computes min/max for scalar field
 
 	use levels
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
 
 	implicit none
 
@@ -593,6 +611,9 @@ c local
             cmax = max(cmax,cc)
 	  end do
 	end do
+
+        cmin = shympi_min(cmin)
+        cmax = shympi_max(cmax)
 
         if( debug ) then
           write(6,*) 'conmima: ',kcmin,lcmin,cmin

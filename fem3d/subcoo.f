@@ -23,12 +23,14 @@ c
 	use basin
 	use mod_geom
 	use levels
+        use shympi
+        use mod_mumps
 
 	implicit none
 
 	logical bnohydro
 	integer k,n,i,ie,ii,m,l,iii
-	integer kn(3),ki,kj,j
+	integer kn(3),ki,kj,j,ki_glob,kj_glob
 	integer kic,kjc,kijc,iiis,iiie
 	integer ipp,ipp0
 	integer nn
@@ -69,6 +71,8 @@ c
 	ijp_ie = 0
 	i2coo = 0
 	j2coo = 0
+	i2coo_pet = 0
+	j2coo_pet = 0
 
 	do ie=1,nel
 	  do ii=1,3
@@ -76,11 +80,21 @@ c
 	  end do
 	  do i=1,3
 	    ki = kn(i)				!row
+            if (bmpi) then
+              ki_glob = mynodes%globalID(ki)
+            else
+              ki_glob = ki
+            end if
 	    ipp0 = ntg(ki-1)			!last entry in row ki-1
 	    n = ng(ki)				!entries in row ki
 	    nodes(1:n) = iorder(1:n,ki)		!nodes of row ki
 	    do j=1,3
 	      kj = kn(j)			!col
+              if (bmpi) then
+                kj_glob = mynodes%globalID(kj)
+              else
+                kj_glob = kj
+              end if
 	      do m=1,n
 	        if( nodes(m) == kj ) exit	!find kj in nodes
 	      end do
@@ -89,10 +103,14 @@ c
 	      if( ipp > n2zero ) goto 97
 	      ijp_ie(i,j,ie) = ipp
 	      i2coo(ipp) = ki
-	      j2coo(ipp) = kj
+              j2coo(ipp) = kj
+	      i2coo_pet(ipp) = ki_glob
+	      j2coo_pet(ipp) = kj_glob
 	    end do
 	  end do
 	end do
+
+        call mumps_init(nkndi,n2zero,i2coo_pet,j2coo_pet)
 
 	if( .not. bsys3d ) return
 

@@ -24,6 +24,8 @@ LIBGOTM    = gotm
 LIBNETCDF  = netcdff
 LIBZOLTAN  = zoltan
 LIBERSEM   = bfm
+LIBPETSC   = petsc
+LIBMUMPS   = mumps
 
 LIBFFEM    = $(DIRLIB)/lib$(LIBFEM).a
 
@@ -60,6 +62,26 @@ ifeq ($(ZOLTAN),true)
   INCL_ZOLTAN      = -I$(DIRINC_ZOLTAN)
 endif
 
+DIRLIB_PETSC = $(PETSCDIR)/linux-gnu-intel/lib
+DIRINC_PETSC0 = $(PETSCDIR)/include
+DIRINC_PETSC1 = $(PETSCDIR)/linux-gnu-intel/include
+DIRINC_PETSC2 = $(PETSCDIR)/include/petsc/finclude
+../femlib/mod/mod_petsc.mod: mod_petsc_dummy.o shympi.o subbas.o mpi_common_struct.o
+PETSC_OBJ = mod_petsc_dummy.o
+../femlib/mod/mod_mumps.mod: mod_mumps.o
+MUMPS_OBJ = mod_mumps.o
+LIBG_PETSC      = -L$(DIRLIB_PETSC) -l$(LIBPETSC)
+LIBF_PETSC      = 
+#LIBF_PETSC      = $(DIRLIB_PETSC)/lib$(LIBPETSC).a
+INCL_PETSC      = -I$(DIRINC_PETSC1) -I$(DIRINC_PETSC2) -I$(DIRINC_PETSC0)
+#INCL_PETSC      = -I$(DIRINC_PETSC0) -I$(DIRINC_PETSC1)
+ifeq ($(PETSC),true)
+../femlib/mod/mod_petsc.mod: mod_petsc.o shympi.o subbas.o mpi_common_struct.o
+  PETSC_OBJ = mod_petsc.o
+../femlib/mod/mod_mumps.mod: mod_mumps_dummy.o
+  MUMPS_OBJ = mod_mumps_dummy.o
+endif
+
 #ifneq ("$(wildcard /usr/lib/libnetcdff.a","")
 #FILE_EXISTS = 1
 #else
@@ -69,7 +91,7 @@ endif
 EXENC = 
 NETCDF_OBJ = 
 DIRLIB_NETCDF = $(NETCDFDIR)/lib/
-DIRLIB_NETCDF = $(NETCDFDIR)/lib/x86_64-linux-gnu
+#DIRLIB_NETCDF = $(NETCDFDIR)/lib/x86_64-linux-gnu
 DIRINC_NETCDF = $(NETCDFDIR)/include
 ifeq ($(NETCDF),true)
   NETCDF_OBJ       = netcdf.o netcdf_util.o 
@@ -82,39 +104,46 @@ endif
 #  NETCDF_OBJ       = netcdf.o netcdf_util.o \
 #			/usr/lib/x86_64-linux-gnu/libnetcdff.so
 
-EXCNUM=13
-EXCLUDED=mod_shympi_node_internal.f mpi_communication.f90 mpi_graph_elem.f90 mpi_utility.f90 mod_shympi_elem.f mod_shympi_elem_internal.f mpi_common_struct.f90 mpi_communication_struct.f90 mod_shypart.f mpi_global_graph_node.f90mpi_partitionin_node.f90 mpi_global_graph_elem.f90 mpi_partitioning_elem.f90 
+EXCNUM=15
+EXCLUDED=mod_shympi_node_internal.f mpi_communication.f90 mpi_graph_elem.f90 mpi_utility.f90 mod_shympi_elem.f mod_shympi_elem_internal.f mpi_common_struct.f90 mpi_communication_struct.f90 mod_shypart.f mpi_global_graph_node.f90 mpi_partitionin_node.f90 mpi_global_graph_elem.f90 mpi_partitioning_elem.f90 mpi_io_elem.f90 mpi_io_node.f90
 
 ../femlib/mod/shympi.mod: mod_shympi_node.o
+mpi_io_node.o: ../femlib/mod/mod_hydro.mod ../femlib/mod/mod_depth.mod ../femlib/mod/shympi.mod
+../femlib/mod/mod_mpi_io.mod: mpi_io_dummy.o 
 ../femlib/mod/shympi_aux.mod: mod_shympi_dummy.o
 PHGOBJ = mod_shypart_dummy.o
-MPI_OBJ = mod_shympi_node.o mod_shympi_dummy.o basin_mpi.o
+MPI_OBJ = mod_shympi_node.o mod_shympi_dummy.o basin_mpi.o mpi_io_dummy.o
 ifeq ($(PARALLEL_MPI),NODE)
-  MPI_OBJ = mod_shympi_node.o mod_shympi_node_internal.o basin_mpi.o
+  MPI_OBJ = mod_shympi_node.o mod_shympi_node_internal.o basin_mpi.o mpi_io_node.o
   PHGOBJ = mpi_partitioning_node.o mpi_global_graph_node.o mod_shypart.o
   FFLAGS += $(MPI_COMPILE_FLAGS)
   LFLAGS += $(MPI_LINK_FLAGS)
 ../femlib/mod/shympi.mod: mod_shympi_node.o
+mpi_io_node.o: ../femlib/mod/mod_hydro.mod ../femlib/mod/mod_depth.mod ../femlib/mod/shympi.mod
+../femlib/mod/mod_mpi_io.mod: mpi_io_node.o 
 ../femlib/mod/shympi_aux.mod: mod_shympi_node_internal.o
 ../femlib/mod/mpi_global_graph_node.mod: mpi_global_graph_node.o
-  EXCNUM=11
-  EXCLUDED=mpi_communication.f90 mpi_graph_elem.f90 mpi_utility.f90 mod_shympi_elem.f mod_shympi_elem_internal.f mpi_common_struct.f90 mpi_communication_struct.f90 mod_shypart_dummy.f mod_shympi_dummy.f mpi_global_graph_elem.f90 mpi_partitioning_elem.f90
+  EXCNUM=13
+  EXCLUDED=mpi_communication.f90 mpi_graph_elem.f90 mpi_utility.f90 mod_shympi_elem.f mod_shympi_elem_internal.f mpi_common_struct.f90 mpi_communication_struct.f90 mod_shypart_dummy.f mod_shympi_dummy.f mpi_global_graph_elem.f90 mpi_partitioning_elem.f90 mpi_io_elem.f90 mpi_io_dummy.f90
 endif
 ifeq ($(PARALLEL_MPI),ELEM)
-  MPI_OBJ = mod_shympi_elem.o mod_shympi_elem_internal.o mpi_graph_elem.o mpi_communication.o mpi_utility.o mpi_common_struct.o mpi_communication_struct.o 
+  MPI_OBJ = mod_shympi_elem.o mod_shympi_elem_internal.o mpi_graph_elem.o mpi_communication.o mpi_utility.o mpi_common_struct.o mpi_communication_struct.o mpi_io_elem.o
   PHGOBJ = mpi_partitioning_elem.o mpi_global_graph_elem.o mod_shypart.o
   FFLAGS += $(MPI_COMPILE_FLAGS)
   LFLAGS += $(MPI_LINK_FLAGS)
-../femlib/mod/shympi.mod: mod_shympi_elem.o
+../femlib/mod/mpi_utility.mod: mpi_utility.o
+../femlib/mod/mpi_communication.mod: mpi_communication.o
+../femlib/mod/mpi_common_struct.mod: mpi_common_struct.o
+../femlib/mod/mpi_graph_elem.mod: mpi_graph_elem.o
+mod_shympi_elem.o: ../femlib/mod/mod_hydro.mod ../femlib/mod/mod_depth.mod
+../femlib/mod/shympi.mod: mod_shympi_elem.o 
+mpi_io_elem.o: ../femlib/mod/mod_hydro.mod ../femlib/mod/mod_depth.mod ../femlib/mod/shympi.mod 
+../femlib/mod/mod_mpi_io.mod: mpi_io_elem.o
 ../femlib/mod/shympi_aux.mod: mod_shympi_elem_internal.o
 ../femlib/mod/mpi_global_graph_elem.mod: mpi_global_graph_elem.o
 ../femlib/mod/mpi_communication_struct.mod: mpi_communication_struct.o
-../femlib/mod/mpi_communication.mod: mpi_communication.o
-../femlib/mod/mpi_utility.mod: mpi_utility.o
-../femlib/mod/mpi_common_struct.mod: mpi_common_struct.o
-../femlib/mod/mpi_graph_elem.mod: mpi_graph_elem.o
-  EXCNUM=6
-  EXCLUDED=mod_shympi_node_internal.f mod_shypart_dummy.f mod_shympi_dummy.f mpi_global_graph_node.f90mpi_partitionin_node.f90
+  EXCNUM=7
+  EXCLUDED=mod_shympi_node_internal.f mod_shypart_dummy.f mod_shympi_dummy.f mpi_global_graph_node.f90 mpi_partitionin_node.f90 mpi_io_node.f90 mpi_io_dummy.f90
 endif
 
 OMP_OBJ = subomp_dummy.o
@@ -151,9 +180,9 @@ endif
 
 #------------------------------------------------------------
 
-LIBGS      = $(LIBLS) $(LIBG_NETCDF) $(LIBG_GOTM) $(LIBG_ERSEM) $(LIBG_MKL) $(LIBG_ZOLTAN)
-LIBFS      = $(LIBF_NETCDF) $(LIBF_GOTM) $(LIBF_ERSEM) $(LIBF_ZOLTAN)
-INCLUDE    = $(INCL_NETCDF) $(INCL_ZOLTAN)
+LIBGS      = $(LIBLS) $(LIBG_NETCDF) $(LIBG_GOTM) $(LIBG_ERSEM) $(LIBG_MKL) $(LIBG_ZOLTAN) $(LIBG_PETSC)
+LIBFS      = $(LIBF_NETCDF) $(LIBF_GOTM) $(LIBF_ERSEM) $(LIBF_ZOLTAN) $(LIBF_PETSC)
+INCLUDE    = $(INCL_NETCDF) $(INCL_ZOLTAN) $(INCL_PETSC)
 
 #------------------------------------------------------------
 
@@ -195,6 +224,8 @@ NEWOBJS = \
 	  newchk.o newfix.o \
 	  newtvd.o newstab.o newsig.o \
 	  newnudge.o newpoi.o \
+	  $(PETSC_OBJ) \
+	  $(MUMPS_OBJ) \
 	  $(MODULES) \
 	  $(MPI_OBJ) 
 
@@ -447,7 +478,7 @@ shympi:  shympi.o $(NEWOBJS) $(HTOBJS) $(LIBFS)
 	$(LINKER) -o $@ $(LFLAGS) $@.o $(NEWOBJS) $(HTOBJS) $(LIBGS)
 
 shypart:  shypart.o $(PHGOBJ) $(NEWOBJS) $(HTOBJS) $(LIBFS) 
-	$(LINKER) -o $@ $(LFLAGS) $(FINTEL_NOOPT) $@.o  $(PHGOBJ) $(NEWOBJS) $(HTOBJS) $(LIBGS) 
+	$(LINKER) -o $@ $(LFLAGS) $@.o  $(PHGOBJ) $(NEWOBJS) $(HTOBJS) $(LIBGS) 
 
 shypre:  shypre.o $(VPOBJS)
 	$(LINKER) -o $@ $(LFLAGS) $@.o $(VPOBJS)
@@ -842,7 +873,7 @@ basutil_smooth.o: ../femlib/mod/basutil.mod \
 		../femlib/mod/mod_geom.mod \
 		../femlib/mod/mod_depth.mod 
 bdist.o: ../femlib/mod/basin.mod ../femlib/mod/shympi.mod \
-		../femlib/mod/mod_geom.mod 
+		../femlib/mod/mod_geom.mod ../femlib/mod/mod_mpi_io.mod
 bio3d.o: param.h ../femlib/mod/levels.mod mkonst.h \
 		../femlib/mod/basin.mod \
 		../femlib/mod/mod_diff_visc_fric.mod 
@@ -992,13 +1023,14 @@ new3di.o: ../femlib/mod/mod_bound_geom.mod mkonst.h \
 		../femlib/mod/mod_hydro_vel.mod \
 		../femlib/mod/shympi.mod ../femlib/mod/tidef.mod \
 		../femlib/mod/basin.mod ../femlib/mod/evgeom.mod \
-		../femlib/mod/mod_nudging.mod 
+		../femlib/mod/mod_nudging.mod
 newbcl.o: ../femlib/mod/basin.mod ../femlib/mod/mod_ts.mod \
 		pkonst.h ../femlib/mod/mod_layer_thickness.mod \
 		../femlib/mod/levels.mod femtime.h \
 		../femlib/mod/mod_hydro.mod param.h mkonst.h \
 		../femlib/mod/mod_hydro_print.mod \
-		../femlib/mod/mod_diff_visc_fric.mod 
+		../femlib/mod/mod_diff_visc_fric.mod \
+		../femlib/mod/mod_mpi_io.mod 
 newchao.o: ../femlib/mod/basin.mod param.h \
 		../femlib/mod/mod_hydro.mod \
 		../femlib/mod/levels.mod femtime.h \
@@ -1301,7 +1333,9 @@ simsys_pard.o: ../femlib/mod/mod_system.mod \
 		../femlib/mod/levels.mod ../femlib/mod/basin.mod 
 simsys_spk.o: ../femlib/mod/shympi.mod ../femlib/mod/levels.mod \
 		../femlib/mod/basin.mod \
-		../femlib/mod/mod_system.mod 
+		../femlib/mod/mod_system.mod \
+		../femlib/mod/mod_petsc.mod \
+		../femlib/mod/mod_mumps.mod
 splitets.o: param.h
 splitflx.o: param.h
 subapn.o: ../femlib/mod/basin.mod
@@ -1338,7 +1372,8 @@ subboxa.o: ../femlib/mod/basin.mod ../femlib/mod/mod_ts.mod \
 subcon1.o: ../femlib/mod/mod_depth.mod simul.h \
 		../femlib/mod/levels.mod femtime.h \
 		../femlib/mod/mod_bound_dynamic.mod mkonst.h \
-		../femlib/mod/basin.mod 
+		../femlib/mod/basin.mod \
+		../femlib/mod/mod_mpi_io.mod 
 subcoo.o: ../femlib/mod/mod_geom.mod ../femlib/mod/mod_system.mod \
 		../femlib/mod/levels.mod param.h \
 		../femlib/mod/basin.mod 
@@ -1373,7 +1408,7 @@ subdif.o: param.h ../femlib/mod/mod_hydro.mod \
 		../femlib/mod/mod_hydro_print.mod \
 		../femlib/mod/mod_depth.mod \
 		../femlib/mod/basin.mod ../femlib/mod/evgeom.mod \
-		../femlib/mod/mod_geom.mod 
+		../femlib/mod/mod_geom.mod ../femlib/mod/mod_mpi_io.mod 
 subdry.o: ../femlib/mod/shympi.mod ../femlib/mod/basin.mod \
 		../femlib/mod/mod_geom_dynamic.mod \
 		../femlib/mod/evgeom.mod \
@@ -1420,7 +1455,8 @@ subflxa.o: ../femlib/mod/mod_ts.mod modules.h \
 subflxu.o: ../femlib/mod/mod_geom.mod ../femlib/mod/levels.mod
 subfvl.o: ../femlib/mod/mod_layer_thickness.mod \
 		../femlib/mod/mod_area.mod \
-		../femlib/mod/levels.mod ../femlib/mod/basin.mod 
+		../femlib/mod/levels.mod ../femlib/mod/basin.mod \
+		../femlib/mod/mod_mpi_io.mod 
 subgotm.o: ../femlib/mod/basin.mod ../femlib/mod/mod_ts.mod \
 		../femlib/mod/shympi.mod ../femlib/mod/evgeom.mod \
 		../femlib/mod/mod_gotm_aux.mod \
@@ -1528,7 +1564,8 @@ subous.o: ousinf.h
 subousa.o: ../femlib/mod/shympi.mod ../femlib/mod/mod_hydro.mod \
 		femtime.h ../femlib/mod/levels.mod \
 		../femlib/mod/basin.mod \
-		../femlib/mod/mod_depth.mod simul.h 
+		../femlib/mod/mod_depth.mod simul.h \
+		../femlib/mod/mod_mpi_io.mod 
 subouta.o: param.h ../femlib/mod/mod_hydro.mod femtime.h \
 		../femlib/mod/basin.mod \
 		../femlib/mod/mod_hydro_print.mod \

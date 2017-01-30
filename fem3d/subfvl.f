@@ -15,6 +15,8 @@ c write of finite volume data
 	use mod_area
 	use levels
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
+        use mod_mpi_io
 
 	implicit none
 
@@ -61,7 +63,15 @@ c normal call
 	end do
 
         id = 66       			!for finite volume
-	call write_scalar_file(ia_out,id,nlvdi,saux)
+        if(bmpi) then
+          call rebuild_3d_nodes(saux, outSaux)
+          if(shympi_is_master().and.
+     +        shympi_partition_on_elements()) then
+	    call write_scalar_file(ia_out,id,nlvdi,outSaux)
+          end if
+        else
+	  call write_scalar_file(ia_out,id,nlvdi,saux)
+        end if
 
 	end
 

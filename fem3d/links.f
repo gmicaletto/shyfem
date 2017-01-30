@@ -18,7 +18,7 @@ c****************************************************************
 c****************************************************************
 c****************************************************************
 
-        subroutine mklenk(nlkddi,nkn,nel,nen3v,ilinkv,lenkv)
+        subroutine mklenk(nlkddi,nkn,nel,nen3v,ilinkv,lenkv,repart)
 
 c sets up vector with element links and a pointer to it
 c
@@ -39,6 +39,7 @@ c arguments
         integer nen3v(3,nel)
         integer ilinkv(nkn+1)
         integer lenkv(*)
+        logical, optional :: repart
 c local
         logical binside
         integer nloop
@@ -203,7 +204,11 @@ c-------------------------------------------------------------------
 c check structure
 c-------------------------------------------------------------------
 
-	call checklenk(nkn,ilinkv,lenkv,nen3v)
+        if(present(repart)) then
+	  call checklenk(nkn,ilinkv,lenkv,nen3v,repart)
+        else
+	  call checklenk(nkn,ilinkv,lenkv,nen3v)
+        end if
 
 c-------------------------------------------------------------------
 c end of routine
@@ -211,27 +216,47 @@ c-------------------------------------------------------------------
 
         return
    97   continue
-        write(6,*) 'node: ',k,'  nkn: ',nkn
-        write(6,*) 'error stop mklenk : internal error (2)'
-        stop 'error stop mklenk : internal error (2)'
+        if(present(repart)) then
+          write(6,*) 'error mklenk : internal error (2)'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+          write(6,*) 'node: ',k,'  nkn: ',nkn
+          write(6,*) 'error stop mklenk : internal error (2)'
+          stop 'error stop mklenk : internal error (2)'
+        end if
    98   continue
-        write(6,*) n,nlkddi
-        write(6,*) nkn,nel,2*nkn+nel
-        stop 'error stop mklenk: nlkddi'
+        if(present(repart)) then
+          stop 'error mklenk: nlkddi'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+          write(6,*) n,nlkddi
+          write(6,*) nkn,nel,2*nkn+nel
+          stop 'error stop mklenk: nlkddi'
+        end if
    99   continue
-        !write(6,*) k,ilinkv(k),ip,ip1
-        write(6,*) 'node: ',k
-        write(6,*) 'element: ',ie
-        write(6,*) 'first entry: ',ilinkv(k)+1
-        write(6,*) 'last entry: ',ip1
-        write(6,*) 'actual pointer: ',ip
-        write(6,*) 'error stop mklenk : internal error (1)'
-        stop 'error stop mklenk : internal error (1)'
+        if(present(repart)) then
+          write(6,*)'error mklenk : internal error (1)'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+          write(6,*) 'node: ',k
+          write(6,*) 'element: ',ie
+          write(6,*) 'first entry: ',ilinkv(k)+1
+          write(6,*) 'last entry: ',ip1
+          write(6,*) 'actual pointer: ',ip
+          write(6,*)'error stop mklenk : internal error (1)'
+          stop 'error stop mklenk : internal error (1)'
+        end if
         end
 
 c****************************************************************
 
-        subroutine checklenk(nkn,ilinkv,lenkv,nen3v)
+        subroutine checklenk(nkn,ilinkv,lenkv,nen3v,repart)
 
 c checks structure of lenkv
 
@@ -242,6 +267,7 @@ c arguments
         integer ilinkv(nkn+1)
         integer lenkv(*)
 	integer nen3v(3,*)
+        logical, optional :: repart
 c local
 	integer nbnd,nnull
 	integer k,k0,k1,ie,ie0,ie1
@@ -269,11 +295,18 @@ c-------------------------------------------------------------------
           do ip=ip0,ip1
             ie = lenkv(ip)
             if( ie .eq. 0 ) then	!0 in index found
-              write(6,*) 'Node (internal) k = ',k
-              write(6,*) k,ip0,ip1
-              write(6,*) (lenkv(i),i=ip0,ip1)
-              write(6,*) 'error stop checklenk: structure of lenkv(2)'
-              stop 'error stop checklenk: structure of lenkv (2)'
+              if(present(repart)) then
+                write(6,*)'error checklenk: structure of lenkv(2)'
+                write(6,*)'needs repartition the domain'
+                repart=.true.
+                return
+              else
+                write(6,*) 'Node (internal) k = ',k
+                write(6,*) k,ip0,ip1
+                write(6,*) (lenkv(i),i=ip0,ip1)
+                write(6,*)'error stop checklenk: structure of lenkv(2)'
+                stop 'error stop checklenk: structure of lenkv (2)'
+              end if
             end if
           end do
 
@@ -283,18 +316,25 @@ c-------------------------------------------------------------------
             k0 = kbhnd(k,ie0)
             k1 = knext(k,ie1)
             if( k0 .ne. k1 ) then	!something is wrong
-              write(6,*) 'Node (internal) k = ',k
-              write(6,*) ip0,ip1,ip
-              write(6,*) ie0,ie1,k0,k1
-              write(6,*) ie0,(kthis(i,ie0),i=1,3)
-              write(6,*) ie1,(kthis(i,ie1),i=1,3)
-              write(6,*) (lenkv(i),i=ip0,ip1)
-	      do ipp=ip0,ip1
-		ie = lenkv(ipp)
-		write(6,*) ie,(nen3v(ii,ie),ii=1,3)
-	      end do
-              write(6,*) 'error stop checklenk: structure of lenkv (3)'
-              stop 'error stop checklenk: structure of lenkv (3)'
+              if(present(repart)) then
+                write(6,*)'error checklenk: structure of lenkv (3)'
+                write(6,*)'needs repartition the domain'
+                repart=.true.
+                return
+              else
+                write(6,*) 'Node (internal) k = ',k
+                write(6,*) ip0,ip1,ip
+                write(6,*) ie0,ie1,k0,k1
+                write(6,*) ie0,(kthis(i,ie0),i=1,3)
+                write(6,*) ie1,(kthis(i,ie1),i=1,3)
+                write(6,*) (lenkv(i),i=ip0,ip1)
+	        do ipp=ip0,ip1
+		  ie = lenkv(ipp)
+		  write(6,*) ie,(nen3v(ii,ie),ii=1,3)
+	        end do
+                write(6,*)'error stop checklenk: structure of lenkv(3)'
+                stop 'error stop checklenk: structure of lenkv(3)'
+              end if
             end if
           end do
 
@@ -322,7 +362,8 @@ c****************************************************************
 c****************************************************************
 c****************************************************************
 
-        subroutine mklenkii(nlkddi,nkn,nel,nen3v,ilinkv,lenkv,lenkiiv)
+        subroutine mklenkii(nlkddi,nkn,nel,nen3v,ilinkv,lenkv,lenkiiv
+     +                   ,repart)
 
 c sets up vector lenkiiv
 c
@@ -344,6 +385,7 @@ c arguments
         integer ilinkv(nkn+1)
         integer lenkv(*)
         integer lenkiiv(*)
+        logical, optional :: repart
 c local
         integer ie,i,n,k,ii,ibase
 
@@ -375,16 +417,23 @@ c-------------------------------------------------------------------
 
 	return
    99	continue
-	write(6,*) 'k,ie,n,ibase ',k,ie,n,ibase
-	write(6,*) 'error stop mklenkii: internal error (1)'
-	stop 'error stop mklenkii: internal error (1)'
+        if(present(repart)) then
+	  write(6,*)'error mklenkii: internal error (1)'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+	  write(6,*) 'k,ie,n,ibase ',k,ie,n,ibase
+	  write(6,*)'error stop mklenkii: internal error (1)'
+	  stop 'error stop mklenkii: internal error (1)'
+        end if
 	end
 
 c****************************************************************
 c****************************************************************
 c****************************************************************
 
-        subroutine mklink(nkn,ilinkv,lenkv,linkv)
+        subroutine mklink(nkn,ilinkv,lenkv,linkv,repart)
 
 c sets up vector with node links
 c
@@ -403,6 +452,7 @@ c arguments
         integer ilinkv(nkn+1)
         integer lenkv(*)
         integer linkv(*)
+        logical, optional :: repart
 c local
         integer ie,k
         integer ip,ip0,ip1
@@ -439,7 +489,11 @@ c-------------------------------------------------------------------
 c check structure
 c-------------------------------------------------------------------
 
-	call checklink(nkn,ilinkv,linkv)
+        if(present(repart)) then
+	  call checklink(nkn,ilinkv,linkv,repart)
+        else
+	  call checklink(nkn,ilinkv,linkv)
+        end if
 
 c-------------------------------------------------------------------
 c end of routine
@@ -449,7 +503,7 @@ c-------------------------------------------------------------------
 
 c****************************************************************
 
-        subroutine checklink(nkn,ilinkv,linkv)
+        subroutine checklink(nkn,ilinkv,linkv,repart)
 
 c checks structure of lenkv
 
@@ -459,6 +513,7 @@ c arguments
         integer nkn
         integer ilinkv(nkn+1)
         integer linkv(*)
+        logical, optional :: repart
 c local
 	integer k,k1,i
 	integer ip,ip0,ip1
@@ -480,11 +535,18 @@ c-------------------------------------------------------------------
           ip0=ilinkv(k)+1
           ip1=ilinkv(k+1)
           if( linkv(ip1) .eq. 0 ) then	!0 in index found
-            write(6,*) 'Node (internal) k = ',k
-            write(6,*) ip0,ip1
-            write(6,*) (linkv(ip),ip=ip0,ip1)
-            write(6,*) 'error stop checklink: internal error (1)'
-            stop 'error stop checklink: internal error (1)'
+            if(present(repart)) then
+              write(6,*)'error checklink: internal error (1)'
+              write(6,*)'needs repartition the domain'
+              repart=.true.
+              return
+            else
+              write(6,*) 'Node (internal) k = ',k
+              write(6,*) ip0,ip1
+              write(6,*) (linkv(ip),ip=ip0,ip1)
+              write(6,*)'error stop checklink: internal error (1)'
+              stop 'error stop checklink: internal error (1)'
+            end if
           end if
 
 	  do ip=ip0,ip1
@@ -496,13 +558,20 @@ c-------------------------------------------------------------------
 	      ipk = ipk + 1
 	    end do
 	    if( ipk .gt. ipk1 ) then	!node not found
-              write(6,*) 'Node (internal) k = ',k
-              write(6,*) ip0,ip1
-              write(6,*) (linkv(i),i=ip0,ip1)
-              write(6,*) k1,ipk0,ipk1
-              write(6,*) (linkv(i),i=ipk0,ipk1)
-              write(6,*) 'error stop checklink: internal error (2)'
-              stop 'error stop checklink: internal error (2)'
+              if(present(repart)) then
+                write(6,*)'error checklink: internal error (2)'
+                write(6,*)'needs repartition the domain'
+                repart=.true.
+                return
+              else
+                write(6,*) 'Node (internal) k = ',k
+                write(6,*) ip0,ip1
+                write(6,*) (linkv(i),i=ip0,ip1)
+                write(6,*) k1,ipk0,ipk1
+                write(6,*) (linkv(i),i=ipk0,ipk1)
+                write(6,*)'error stop checklink: internal error (2)'
+                stop 'error stop checklink: internal error (2)'
+	      end if
 	    end if
 	  end do
         end do
@@ -521,7 +590,7 @@ c****************************************************************
 c****************************************************************
 c****************************************************************
 
-        subroutine mkkant(nkn,ilinkv,lenkv,linkv,kantv)
+        subroutine mkkant(nkn,ilinkv,lenkv,linkv,kantv,repart)
 
 c makes vector kantv
 
@@ -533,6 +602,7 @@ c arguments
         integer lenkv(*)
         integer linkv(*)
         integer kantv(2,nkn)
+        logical, optional :: repart
 c local
 	integer k
 	integer ip,ip0,ip1
@@ -555,7 +625,11 @@ c-------------------------------------------------------------------
 c check structure
 c-------------------------------------------------------------------
 
-	call checkkant(nkn,kantv)
+        if(present(repart)) then
+	  call checkkant(nkn,kantv,repart)
+        else
+	  call checkkant(nkn,kantv)
+        end if
 
 c-------------------------------------------------------------------
 c end of routine
@@ -565,7 +639,7 @@ c-------------------------------------------------------------------
 
 c****************************************************************
 
-        subroutine checkkant(nkn,kantv)
+        subroutine checkkant(nkn,kantv,repart)
 
 c checks structure of kantv
 
@@ -574,6 +648,7 @@ c checks structure of kantv
 c arguments
         integer nkn
         integer kantv(2,nkn)
+        logical, optional :: repart
 c local
 	integer k,k1,k2
 	integer nbnd,nint
@@ -594,19 +669,33 @@ c-------------------------------------------------------------------
 	  if( k1 .gt. 0 .and. k2 .gt. 0 ) then
 	    nbnd = nbnd + 1
 	    if( k .ne. kantv(2,k1) .or. k .ne. kantv(1,k2) ) then
-              write(6,*) 'Node (internal) k = ',k
-	      write(6,*) 'k1,k2: ',k1,k2
-	      write(6,*) 'backlink: ',kantv(2,k1),kantv(1,k2)
-	      write(6,*) 'error stop checkkant: structure of kantv (2)'
-	      stop 'error stop checkkant: structure of kantv (2)'
+              if(present(repart)) then
+	        write(6,*) 'error checkkant: structure of kantv(2)'
+                write(6,*)'needs repartition the domain'
+                repart=.true.
+                return
+              else
+                write(6,*) 'Node (internal) k = ',k
+	        write(6,*) 'k1,k2: ',k1,k2
+	        write(6,*) 'backlink: ',kantv(2,k1),kantv(1,k2)
+	        write(6,*) 'error stop checkkant: structure of kantv(2)'
+	        stop 'error stop checkkant: structure of kantv(2)'
+	      end if
 	    end if
 	  else if( k1 .eq. 0 .and. k2 .eq. 0 ) then
 	    nint = nint + 1
 	  else
-            write(6,*) 'Node (internal) k = ',k
-	    write(6,*) 'k1,k2: ',k1,k2
-	    write(6,*) 'error stop checkkant: structure of kantv (1)'
-	    stop 'error stop checkkant: structure of kantv (1)'
+            if(present(repart)) then
+	      write(6,*) 'error checkkant: structure of kantv(1)'
+              write(6,*)'needs repartition the domain'
+              repart=.true.
+              return
+            else
+              write(6,*) 'Node (internal) k = ',k
+	      write(6,*) 'k1,k2: ',k1,k2
+	      write(6,*) 'error stop checkkant: structure of kantv(1)'
+	      stop 'error stop checkkant: structure of kantv(1)'
+	    end if
 	  end if
         end do
 
@@ -624,7 +713,7 @@ c****************************************************************
 c****************************************************************
 c****************************************************************
 
-        subroutine mkielt(nkn,nel,ilinkv,lenkv,linkv,ieltv)
+        subroutine mkielt(nkn,nel,ilinkv,lenkv,linkv,ieltv,repart)
 
 c makes vector ieltv (without open boundary nodes)
 
@@ -636,6 +725,7 @@ c arguments
         integer lenkv(*)
         integer linkv(*)
         integer ieltv(3,nel)
+        logical, optional :: repart
 c local
 	integer k,ie,ii
 	integer ip,ip0,ip1
@@ -678,8 +768,12 @@ c	  -------------------------------------------------------------------
 c-------------------------------------------------------------------
 c check structure
 c-------------------------------------------------------------------
-
-	call checkielt(nel,ieltv)
+ 
+        if(present(repart)) then
+	  call checkielt(nel,ieltv,repart)
+        else
+	  call checkielt(nel,ieltv)
+        end if
 
 c-------------------------------------------------------------------
 c end of routine
@@ -689,7 +783,7 @@ c-------------------------------------------------------------------
 
 c****************************************************************
 
-        subroutine checkielt(nel,ieltv)
+        subroutine checkielt(nel,ieltv,repart)
 
 c checks structure of ieltv
 
@@ -698,6 +792,7 @@ c checks structure of ieltv
 c arguments
         integer nel
         integer ieltv(3,nel)
+        logical, optional :: repart
 c local
 	integer k,ie,ii
 	integer kn,inn,ien,ienn
@@ -754,20 +849,34 @@ c-------------------------------------------------------------------
 
         return
    98   continue
-        write(6,*) 'Element (internal) ie = ',ie
-        write(6,*) 'ii,ien,nel: ',ii,ien,nel
-        write(6,*) 'k,kn,inn,ienn: ',k,kn,inn,ienn
-        write(6,*) 'nen3v: ',ie,(kthis(ii,ie),ii=1,3)
-        write(6,*) 'nen3v: ',ien,(kthis(ii,ien),ii=1,3)
-        write(6,*) 'ieltv: ',ie,(ieltv(ii,ie),ii=1,3)
-        write(6,*) 'ieltv: ',ien,(ieltv(ii,ien),ii=1,3)
-	write(6,*) 'error checkielt: corrupt data structure of ieltv (1)'
-        stop 'error stop checkielt: corrupt data structure of ieltv (1)'
+        if(present(repart)) then
+          write(6,*)'error checkielt:corrupt data structure of ieltv(1)'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+          write(6,*) 'Element (internal) ie = ',ie
+          write(6,*) 'ii,ien,nel: ',ii,ien,nel
+          write(6,*) 'k,kn,inn,ienn: ',k,kn,inn,ienn
+          write(6,*) 'nen3v: ',ie,(kthis(ii,ie),ii=1,3)
+          write(6,*) 'nen3v: ',ien,(kthis(ii,ien),ii=1,3)
+          write(6,*) 'ieltv: ',ie,(ieltv(ii,ie),ii=1,3)
+          write(6,*) 'ieltv: ',ien,(ieltv(ii,ien),ii=1,3)
+          write(6,*)'error checkielt:corrupt data structure of ieltv(1)'
+          stop 'error stop checkielt:corrupt data structure of ieltv(1)'
+        end if
    99   continue
-        write(6,*) 'Element (internal) ie = ',ie
-        write(6,*) 'ii,ien,nel: ',ii,ien,nel
-	write(6,*) 'error checkielt: corrupt data structure of ieltv (2)'
-        stop 'error stop checkielt: corrupt data structure of ieltv (2)'
+        if(present(repart)) then
+          write(6,*)'error checkielt:corrupt data structure of ieltv(2)'
+          write(6,*)'needs repartition the domain'
+          repart=.true.
+          return
+        else
+          write(6,*) 'Element (internal) ie = ',ie
+          write(6,*) 'ii,ien,nel: ',ii,ien,nel
+          write(6,*)'error checkielt:corrupt data structure of ieltv(2)'
+          stop 'error stop checkielt:corrupt data structure of ieltv(2)'
+        end if
 	end
 
 c****************************************************************

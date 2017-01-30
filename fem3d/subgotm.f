@@ -209,7 +209,7 @@ c---------------------------------------------------------------
 c aux arrays superposed onto other aux arrays
 c---------------------------------------------------------------
 
-	real taub(nkn)
+	double precision taub(nkn)
 
 	integer ioutfreq,ks
         integer iunit,id
@@ -231,7 +231,7 @@ c---------------------------------------------------------------
 	parameter(charnock_val=1400.)	!default value = 1400.
 	double precision z0s_min	!minimum value of z0s
 	parameter(z0s_min=0.02)
-	real ubot,vbot,rr
+	double precision ubot,vbot,rr
 
 	real dtreal
 	real getpar
@@ -758,7 +758,7 @@ c bug fix in computation of shearf2 -> abs() statements to avoid negative vals
 	include 'femtime.h'
 
 	integer k,l,nlev
-	real aux,dh,du,dv,m2,dbuoy
+	double precision aux,dh,du,dv,m2,dbuoy
 	real h(nldim)
 	real cnpar			!numerical "implicitness" parameter
 	real n2max,n2
@@ -847,9 +847,8 @@ c taub (stress at bottom) is accumulated and weighted by area
 	real czdef
 	real taub(nkn)
 
-
 	integer k,ie,ii,n,nlev
-	real aj,taubot
+	double precision aj,taubot
 
 c	---------------------------------------------------
 c	initialize arrays
@@ -912,7 +911,7 @@ c checks arrays for nan or other strange values
 	integer nldim
 	real buoyf2(nldim,nkn)
 	real shearf2(nldim,nkn)
-	real taub(nkn)
+	double precision taub(nkn)
 
 	call nantest(nkn*nldim,shearf2,'shearf2')
 	call nantest(nkn*nldim,buoyf2,'buoyf2')

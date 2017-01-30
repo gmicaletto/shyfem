@@ -91,11 +91,18 @@
 
 	use mod_system
 	use shympi
+        use mod_petsc
+        use mod_mumps
+        use basin
 
 	implicit none
 
+        include 'femtime.h'
 	integer n
 	real z(n)
+        integer i
+        character(len=25) :: filenam
+        double precision, allocatable, dimension(:) :: total_raux2d
 
 	if( bsysexpl ) then
 	  !write(6,*) 'solving explicitly...'
@@ -103,8 +110,36 @@
           call shympi_exchange_and_sum_2D_nodes(raux2d)
           !call shympi_comment('shympi_elem: exchange rvec2d, raux2d')
 	  rvec2d = rvec2d / raux2d	!GGUEXPL
+
 	else
-	  call spk_solve_system(.false.,n2max,n,z)
+          if(b_use_mpi) then
+            call shympi_exchange_and_sum_2D_nodes(rvec2d)
+            call sol_petsc(nkn_inner,n2zero,i2coo_pet,
+     +                     j2coo_pet,c2coo ,rvec2d,raux2d)
+            if(shympi_is_master()) then
+              if (bmpi) then 
+                call mumps_gather_2d_nodes_d(rvec2d,total_raux2d)
+                call mumps_solve(niter,c2coo,
+     +                        total_rhs_map, total_raux2d)
+                call petsc_gather_2d_nodes_d(raux2d,total_raux2d)
+                call shympi_scatter_2d_nodes_d(rvec2d,total_raux2d)
+              else    
+                call mumps_solve(niter,c2coo,
+     +                        total_rhs_map, rvec2d)
+              end if
+            else
+              if (bmpi) then 
+              call mumps_gather_2d_nodes_d(rvec2d) 
+              end if
+              call mumps_solve(niter,c2coo,total_rhs_map)
+              if (bmpi) then 
+                call petsc_gather_2d_nodes_d(raux2d)
+                call shympi_scatter_2d_nodes_d(rvec2d)
+              end if
+            end if
+          else
+	    call spk_solve_system(.false.,n2max,n,z)
+          end if
 	end if
 
 	end

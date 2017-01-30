@@ -62,7 +62,7 @@ c***************************************************************************
 c write 2d nos file
 
 	use mod_depth
-	use basin, only : nkn,nel,ngr,mbw
+	use basin, only : nkn,nel,ngr,mbw,nkndi,neldi
 
         implicit none
 
@@ -100,7 +100,7 @@ c-----------------------------------------------------------------
         nb = ifileo(55,pfile,'unform','unknown')
         if( nb .le. 0 ) goto 98
 
-        call wfnos(nb,nvers,nkn,nel,nlv,nvar,ptitle,ierr)
+        call wfnos(nb,nvers,nkndi,neldi,nlv,nvar,ptitle,ierr)
         if(ierr.ne.0) goto 99
         call wsnos(nb,ilhkv,hlv,hev,ierr)
         if(ierr.ne.0) goto 99

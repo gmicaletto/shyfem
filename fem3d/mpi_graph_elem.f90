@@ -21,17 +21,6 @@ contains
 !* on the elements of a subprocess(global ID elements, rank ID process *!
 !* neighbor, globalID neighbor elements, etc.)                         *!
 !#######################################################################!
-!######################################################################################################!
-! n = local ID of the Elements number(numMyVertices)                                                   !
-!                        <---------- n --------->                                                      !
-! myele%globalID         |||||||||||||||||||||||| globalID of the element                              !
-! myele%rankID(1,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !   
-! myele%rankID(2,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! myele%rankID(3,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! myele%neighborID(1,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! myele%neighborID(2,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! myele%neighborID(3,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-!######################################################################################################!
 
   subroutine makeMyEle(numMyVertices, numGlobalVertices, struct)
 
@@ -92,21 +81,9 @@ contains
 
     myneighbor = 0
     k = 0
-!    locID=1
     myele%numberID=0
     do i=1,numGlobalVertices
        if(allPartAssign(i) .eq. my_id) then
-
-
-!          k=1
-!          do j=0,nneighbor-1
-!             if(allPartAssign(neighbID) .ne. my_id) then
-!                myele%rankID(k,locID) = allPartAssign(neighbID)
-!                myele%neighborID(k,locID) = neighbID
-!                k= k+1
-!             end if
-!          end do
-
 
           do h=1,3
             n = struct(h,i)
@@ -124,9 +101,7 @@ contains
             end do
           end do
 
-
           myele%numberID=myele%numberID+1
-!          locID = locID + 1
        end if
     end do
 
@@ -207,7 +182,6 @@ contains
        part_receives = 0
        part_sends = 0
 
- 
        do i=numMyVertices+1,myele%totalID
 
           if(allPartAssign(myele%globalID(i)) .eq. mypart%mysend%process(h)) then
@@ -260,7 +234,6 @@ contains
           end do
 
        end do
-
 
        allocate(mypart%myreceive%all_receive(h)%items(t))
 
@@ -343,17 +316,6 @@ contains
 !***  on the nodes of a subprocess(global ID nodes, rank ID process  ***!
 !*****          neighbor, globalID neighbor nodes, etc.)           *****!
 !#######################################################################!
-!########################################################################################################!
-! n = local ID of the node number                                                                        !
-!                          <---------- n --------->                                                      !
-! mynodes%globalID         |||||||||||||||||||||||| globalID of the node                                 !
-! mynodes%rankID(1,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !   
-! mynodes%rankID(2,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! mynodes%rankID(3,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! mynodes%neighborID(1,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! mynodes%neighborID(2,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! mynodes%neighborID(3,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-!########################################################################################################!
 
   subroutine makeMyNodes(myele, mystruct, mynodes, struct, nkn)
 
@@ -410,8 +372,12 @@ contains
     mynodes%numberID = length
 
     allocate(numberNodes(n_threads))
+    allocate(procNodes(n_threads))
 
     call MPI_ALLGATHER(mynodes%numberID, 1, MPI_INTEGER, numberNodes, 1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
+
+    procNodes=numberNodes
+
 
     totalNodes = numberNodes(1)
     do i=2,n_threads
@@ -422,7 +388,7 @@ contains
       write(6,*)'totalNodes=',totalNodes
     end if
 
-    allocate(allNodesAssign(n_threads,nkn))
+    allocate(allNodesAssign(nkn,n_threads))
     allocate(fullNodesAssign(totalNodes))
 
 
@@ -438,6 +404,7 @@ contains
     end do
 
     call MPI_ALLGATHERV(sort_nodes, sendbuffer, MPI_INTEGER, fullNodesAssign, recvbuffer, displs, MPI_INTEGER, MPI_COMM_WORLD, ierr)
+    call MPI_Reduce(size(sort_nodes),maxNodes,1,MPI_INTEGER,MPI_MAX,0,MPI_COMM_WORLD, ierr)
 
     call makeNodesAssign(fullNodesAssign, nkn, n_threads)
     deallocate(fullNodesAssign)
@@ -453,7 +420,7 @@ contains
     do i=myele%numberID+1,myele%totalID
       do j=1,3
         node = struct(j,myele%globalID(i))
-        if(allNodesAssign(my_id+1,node) .ne. 1) then
+        if(allNodesAssign(node,my_id+1) .ne. 1) then
          nneighbor = nneighbor + 1 
          neighbor(nneighbor) = node 
         end if
@@ -478,7 +445,7 @@ contains
       do j=1,3
         node = struct(j,myele%globalID(i))
         do k=my_id+2,n_threads
-          if(allNodesAssign(k,node) .eq. 1) then
+          if(allNodesAssign(node,k) .eq. 1) then
             nnodbound = nnodbound + 1
             nodbound(nnodbound) = node
             exit
@@ -532,7 +499,7 @@ contains
       mynodes%globalID(i) = sort_neighbor(i-mynodes%numberID)
     end do
 
-    !call checkMyNodes
+    call setUnivocal
 
     allocate(mypart%mysend%node_send(mypart%mysend%sends))
     allocate(mypart%mysend%node_temp(mypart%mysend%sends))
@@ -585,6 +552,7 @@ contains
           tempvar = mypart%mysend%node_send(h)%items(j+1)
           mypart%mysend%node_send(h)%items(j+1) = mypart%mysend%node_send(h)%items(j)
           mypart%mysend%node_send(h)%items(j) = tempvar
+          if(j .eq. 1) exit
           j = j-1
         end do
       end do
@@ -592,11 +560,11 @@ contains
     end do
     end if
 
-    write(6,*)'myNodes is= ',mynodes%numberID,my_id
+    !write(6,*)'myNodes is= ',mynodes%numberID,my_id
 
-    if(my_id .ne. 0) then
+    !if(my_id .ne. 0) then
       deallocate(allNodesAssign)
-    end if
+    !end if
 
     deallocate (sort_nodes)
     deallocate (neighbor)
@@ -609,16 +577,16 @@ contains
 
 !########################################################################################################!
 
-   subroutine checkMyNodes
+   subroutine setUnivocal
 
      use mpi_common_struct
 
      implicit none
-     integer i,j,k,test
+     integer i,j,k,test,n
      integer total_nod,ierr
      integer, allocatable,dimension(:) :: nnodes,nnodesAssign
      integer, dimension(n_threads) :: sendbuffer,recvbuffer, displs
-
+     double precision temp(maxNodes)
 
      call MPI_ALLREDUCE(mynodes%itemID, total_nod, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
 
@@ -626,7 +594,7 @@ contains
      allocate(nnodes(n_threads))
      allocate(nnodesAssign(total_nod))
 
-     write(6,*)'checkMyNodes:',nkndi,total_nod
+     !write(6,*)'checkMyNodes:',nkndi,total_nod
 
      call MPI_AllGATHER(mynodes%itemID, 1, MPI_INTEGER, nnodes, 1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
 
@@ -680,10 +648,33 @@ contains
     end do
 
      numberNodes = nnodes
-     totalNodes = nkndi
+     !totalNodes = nkndi
 
      deallocate(nnodes)
-     deallocate(nnodesAssign)
+     !deallocate(nnodesAssign)
+
+     if(my_id .eq. 0) then
+       allocate(scatterNodes(totalNodes))
+       k=0
+       do i=1,n_threads
+         n=0
+         do j=1,nkndi
+           if(allNodesAssign(j,i) .eq. 1) then
+             if(univocalNodesAssign(j) .eq. (i-1)) then
+               k=k+1
+               scatterNodes(k) = j
+             else
+               n=n+1
+               temp(n) = j
+             end if
+           end if
+         end do
+         do j=1,n
+           k=k+1
+           scatterNodes(k)=temp(j)
+         end do
+       end do
+     end if
 
    end subroutine
 
@@ -697,23 +688,19 @@ contains
     implicit none
 
     integer, dimension(totalNodes) :: fullNodesAssign
-!    integer, dimension(n_threads,nkn) :: allNodesAssign
-!    integer totalNodes, i, j, node, nkn, n_threads
     integer i, j, node, nkn, n_threads
     integer, dimension(n_threads) :: offset
 
+    allNodesAssign = -1
 
     offset(1) = 0
     do i=1, n_threads
-      do j=1,nkn
-        allNodesAssign(i,j) = -1
-      end do
       if(i .gt. 1) then
         offset(i) = offset(i-1) + numberNodes(i-1)
       end if
       do j=1, numberNodes(i)
         node = fullNodesAssign(offset(i)+j)
-        allNodesAssign(i,node) = 1 
+        allNodesAssign(node,i) = 1 
       end do
     end do
    
@@ -1771,71 +1758,6 @@ contains
 
   end subroutine
 
-!#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildIntSubStructures(struct, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    integer, dimension(size2) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    integer, allocatable, dimension(:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(totalNodes))
-      else
-        write(6,*)'error in rebuildRealStructures', mode, my_id
-        stop
-      end if
-    end if
-
-    sendbuffer = sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct, sendbuffer, MPI_INTEGER, fullStruct, sizeArray, displs, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildIntSubStruct(fullStruct, displsProc, newStruct, size2)
-      else
-        call rebuildIntSubStruct2(fullStruct, displsProc, newStruct, size2)
-      end if
-      deallocate(fullStruct)
-    end if
-
-  end subroutine
-
 
   subroutine rebuildIntSubStruct(fullStruct, displsProc, newStruct, size2)
 
@@ -1865,177 +1787,7 @@ contains
   end subroutine
 
 
-  subroutine rebuildIntSubStruct2(fullStruct, displsProc, newStruct, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    integer, dimension(:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          newStruct(i) = fullStruct(place)
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-
 !#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildRealSubStructures(struct, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    real, dimension(size2) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    real, allocatable, dimension(:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(totalNodes))
-      else
-        write(6,*)'error in rebuildRealStructures', mode, my_id
-        stop
-      end if
-    end if
-
-    sendbuffer = sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct, sendbuffer, MPI_REAL, fullStruct, sizeArray, displs, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildRealSubStruct(fullStruct, displsProc, newStruct, size2)
-      else
-        call rebuildRealSubStruct2(fullStruct, displsProc, newStruct, size2)
-      end if
-      deallocate(fullStruct)
-    end if
-
-  end subroutine
-
-
-!#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildRealStructures(struct, size1, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size1, size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    real, dimension(size1,1) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    real, allocatable, dimension(:,:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(size1,size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(size1,totalNodes))
-      else
-        write(6,*)'error in rebuildRealStructures', mode, my_id
-        stop
-      end if
-      do i=1,n_threads
-        recvbuffer(i) = sizeArray(i) * size1
-      end do
-    end if
-
-    sendbuffer = size1 * sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + size1 * sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct, sendbuffer, MPI_REAL, fullStruct, recvbuffer, displs, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildRealStruct(fullStruct, displsProc, newStruct, size1, size2)
-      else
-        call rebuildRealStruct2(fullStruct, displsProc, newStruct, size1, size2)
-      end if
-      deallocate(fullStruct)
-    end if
-
-  end subroutine
-
 
 
   subroutine rebuildDP_ccle(struct, size1, size2, sizeArray, newStruct, mode)
@@ -2134,288 +1886,6 @@ contains
 
 
 
-!#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildReal0Structures(struct, size1, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size1, size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    real, dimension(0:size1,1) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    real, allocatable, dimension(:,:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(0:size1,size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(0:size1,totalNodes))
-      else
-        write(6,*)'error in rebuildRealStructures', mode, my_id
-        stop
-      end if
-      do i=1,n_threads
-        recvbuffer(i) = sizeArray(i) * (size1+1)
-      end do
-    end if
-
-    sendbuffer = (size1+1) * sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + (size1+1) * sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct, sendbuffer, MPI_REAL, fullStruct, recvbuffer, displs, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildReal0Struct(fullStruct, displsProc, newStruct, size1, size2)
-      else
-        call rebuildReal0Struct2(fullStruct, displsProc, newStruct, size1, size2)
-      end if
-      deallocate(fullStruct)
-    end if
-
-    return
-
-
-  end subroutine
-
-
-  subroutine rebuildDP0Structures(struct, size1, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size1, size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    double precision, dimension(0:size1,1) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    double precision, allocatable, dimension(:,:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(0:size1,size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(0:size1,totalNodes))
-      else
-        write(6,*)'error in rebuildRealStructures', mode, my_id
-        stop
-      end if
-      do i=1,n_threads
-        recvbuffer(i) = sizeArray(i) * (size1+1)
-      end do
-    end if
-
-    sendbuffer = (size1+1) * sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + (size1+1) * sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct,sendbuffer,MPI_DOUBLE_PRECISION,fullStruct, &
-                recvbuffer,displs,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildDP0Struct(fullStruct, displsProc, newStruct, size1, size2)
-      else
-        call rebuildDP0Struct2(fullStruct, displsProc, newStruct, size1, size2)
-      end if
-      deallocate(fullStruct)
-    end if
-
-    return
-
-
-  end subroutine
-
-
-!#############################################################################!
-!*************************  start rebuildRealStruct2 *************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildReal0Struct2(fullStruct, displsProc, newStruct, size1, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size1, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    real, dimension(:,:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          !do k=0, size1
-          !  newStruct(k,i) = fullStruct(k,place)
-            newStruct(:,i) = fullStruct(:,place)
-          !end do
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-
-
-!#############################################################################!
-!*************************  start rebuildRealStruct2 *************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildDP0Struct2(fullStruct, displsProc, newStruct, size1, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size1, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    double precision, dimension(:,:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          !do k=0, size1
-          !  newStruct(k,i) = fullStruct(k,place)
-            newStruct(:,i) = fullStruct(:,place)
-          !end do
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-
-
-!#############################################################################!
-!*************************  start rebuildRealStruct2 *************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildRealStruct2(fullStruct, displsProc, newStruct, size1, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size1, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    real, dimension(:,:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          do k=1, size1
-            newStruct(k,i) = fullStruct(k,place)
-          end do
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-
 
 !#############################################################################!
 !*************************  start rebuildRealStruct  *************************!
@@ -2463,7 +1933,7 @@ contains
 
 
 !#############################################################################!
-!*************************  start rebuildRealStruct  *************************!
+!*************************  start rebuildDP0Struct  *************************!
 !#############################################################################!
 !#############################################################################!
 !******** This subroutine rebuild a complete structure after a parallel ******!
@@ -2532,89 +2002,15 @@ contains
       countProc(i)=1
     end do
 
-!    open(unit=1500, file="testddxv2.txt", action='write')
     do i=1, size2
       process = allPartAssign(i)
       place = displsProc(process+1) + countProc(process+1)
-!      if(i .gt. 100 .and. i .lt. 200) then
-!        write(1500,*)'ie =',i
-!      end if
       do j=1,size1
         newStruct(j,i) = fullStruct(j,place)
-!        if(i .gt. 100 .and. i .lt. 200) then
-!          write(1500,*)'newstruct',newStruct(j,i)
-!        end if
       end do
       countProc(process+1) = countProc(process+1) + 1
     end do
-!    close(1500)
     
-
-  end subroutine
-
-
-!#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildDPSubStructures(struct, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size2, mode
-    integer :: count_tag, i
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer :: sendbuffer
-    double precision, dimension(1) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    double precision, allocatable, dimension(:) :: fullStruct
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(totalNodes))
-      else
-        write(6,*)'error in rebuildDPStructures', mode, my_id
-        stop
-      end if
-      do i=1,n_threads
-        recvbuffer(i) = sizeArray(i)
-      end do
-    end if
-
-    sendbuffer = sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct,sendbuffer,MPI_DOUBLE_PRECISION,fullStruct, &
-                recvbuffer,displs,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildDPSubStruct(fullStruct, displsProc, newStruct, size2)
-      else
-        call rebuildDPSubStruct2(fullStruct, displsProc, newStruct, size2)
-      end if
-    end if
-
-    return
 
   end subroutine
 
@@ -2654,120 +2050,6 @@ contains
   end subroutine
 
 !#############################################################################!
-!*************************  start rebuildRealSubStruct2 **********************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildDPSubStruct2(fullStruct, displsProc, newStruct, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    double precision, dimension(:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          newStruct(i) = fullStruct(place)
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-!#############################################################################!
-!**************************  start rebuildStructures  ************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine update the variables itend and it to allow *********!
-!***************** the execution of the loop on the time steps ***************!
-!#############################################################################!
-
-  subroutine rebuildDPStructures(struct, size1, size2, sizeArray, newStruct, mode)
-
-    use mpi_common_struct
-
-    implicit none
-
-    include 'femtime.h'
-    include 'nlevel.h'
-
-    integer size1, size2, mode
-    integer :: count_tag, i
-!    integer :: nlvdi,nlv
-    integer :: st(MPI_STATUS_SIZE), ierr
-!    integer itanf,itend,idt,nits,niter,it
-    integer :: sendbuffer
-    double precision, dimension(size1,1) :: struct, newStruct
-    integer, dimension(n_threads) :: displsProc, sizeArray, recvbuffer, displs
-    double precision, allocatable, dimension(:,:) :: fullStruct
-!    common /femtim/ itanf,itend,idt,nits,niter,it
-!    common /level/ nlvdi,nlv
-
-    if(my_id .eq. 0) then
-      if(mode .eq. 1) then  !structure based on elements
-        allocate(fullStruct(size1,size2)) 
-      else if(mode .eq. 2) then  !structure based on nodes
-        allocate(fullStruct(size1,totalNodes))
-      else
-        write(6,*)'error in rebuildDPStructures', mode, my_id
-        stop
-      end if
-      do i=1,n_threads
-        recvbuffer(i) = sizeArray(i) * size1
-      end do
-    end if
-
-    sendbuffer = size1 * sizeArray(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + size1 * sizeArray(i-1)
-    end do
-
-    call MPI_GATHERV(struct,sendbuffer,MPI_DOUBLE_PRECISION,fullStruct, &
-                recvbuffer,displs,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-
-    if(my_id .eq. 0) then
-      displsProc(1) = 0
-      do i=2,n_threads
-        displsProc(i) = displsProc(i-1) + sizeArray(i-1)
-      end do
-      if(mode .eq. 1) then
-        call rebuildDPStruct(fullStruct, displsProc, newStruct, size1, size2)
-      else
-        call rebuildDPStruct2(fullStruct, displsProc, newStruct, size1, size2)
-      end if
-    end if
-
-    return
-
-  end subroutine
-
-
-!#############################################################################!
 !*************************  start rebuildDPStruct  ***************************!
 !#############################################################################!
 !#############################################################################!
@@ -2798,53 +2080,6 @@ contains
         newStruct(j,i) = fullStruct(j,place)
       end do
       countProc(process+1) = countProc(process+1) + 1
-    end do
-   
-    return 
-
-  end subroutine
-
-
-!#############################################################################!
-!*************************  start rebuildDPStruct2  ***************************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildDPStruct2(fullStruct, displsProc, newStruct, size1, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size1, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    double precision, dimension(:,:) :: fullStruct, newStruct
-    logical bexit
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          do k=1, size1
-            newStruct(k,i) = fullStruct(k,place)
-          end do
-          bexit = .true.
-        end if
-      end do
     end do
    
     return 
@@ -2889,82 +2124,6 @@ contains
 
 
 !#############################################################################!
-!*************************  start rebuildRealSubStruct2 **********************!
-!#############################################################################!
-!#############################################################################!
-!******** This subroutine rebuild a complete structure after a parallel ******!
-!**** subroutine, significant for the root process only. double precision ****!
-!#############################################################################!
-
-  subroutine rebuildRealSubStruct2(fullStruct, displsProc, newStruct, size2)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer :: place, i, j, k, size2
-    integer :: st(MPI_STATUS_SIZE), ierr
-    integer, dimension(:) :: countProc(n_threads), displsProc(1)
-    real, dimension(:) :: fullStruct, newStruct
-    logical bexit 
-
-    ! countProc(1) = counter for items of the master process
-    do i=1,n_threads
-      countProc(i)=1
-    end do
-
-    do i=1, size2
-      bexit = .false.
-      do j=1,n_threads
-        if(allNodesAssign(j,i) .eq. 1) then
-          place = displsProc(j) + countProc(j)
-          countProc(j) = countProc(j) + 1
-          if(bexit .eqv. .true.) then
-            cycle
-          end if
-          newStruct(i) = fullStruct(place)
-          bexit = .true.
-        end if
-      end do
-    end do
-   
-    return 
-
-  end subroutine
-
-
-   subroutine gatherStruct_r(array)
-
-      use basin
-      use levels
-      use mpi_common_struct
-
-      implicit none
-
-      real array(nlvdi,nkn)
-      real, allocatable, dimension(:,:) :: temp,tempArray
-
-      if(my_id .eq. 0) then
-        allocate(tempArray(nlvdi,nkndi))
-      end if
-      allocate(temp(nlvdi,mynodes%totalID))
-
-
-
-      call rebuildRealStructures(array,nlvdi,nkndi,numberNodes,tempArray, 2)
-
-      if(my_id .ne. 0) then
-        call setRealStruct(temp, mynodes, temp, nlvdi, 2)
-      else
-        call setRealStruct(tempArray, mynodes, temp, nlvdi, 2)
-      end if
-
-      array = temp
-
-      return
-
-   end subroutine
-
 
 
 
@@ -3086,7 +2245,7 @@ contains
          temp = res(h-1)
          res(h-1) = res(h)
          res(h) = temp
-         if(h .eq. 1) exit
+         if(h .eq. 2) exit
          h = h-1
        end do
 
@@ -3145,7 +2304,7 @@ contains
          temp = res(h-1)
          res(h-1) = res(h)
          res(h) = temp
-         if(h .eq. 1) exit
+         if(h .eq. 2) exit
          h = h-1
        end do
 

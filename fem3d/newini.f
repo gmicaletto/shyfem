@@ -144,7 +144,7 @@ c check data structure
 c------------------------------------------------------------------
 
 	nlv_final = nlv
-	call levels_reinit(nlv_final)
+	!call levels_reinit(nlv_final)
 
 	call check_vertical
 
@@ -1148,12 +1148,10 @@ c spherical setting the basin projection (iproj > 0)
 	end if
        
 c next must be handled differently - shympi FIXME
+       
+	ymin = shympi_min(yaux)
+	ymax = shympi_max(yaux)
 
-	!yc   = sum(yaux)/nkn
-	ymin = minval(yaux)
-	ymin = shympi_min(ymin)
-	ymax = maxval(yaux)
-	ymax = shympi_max(ymax)
 	yc = (ymax-ymin)/2.
 
 	if( bgeo ) dlat = yc		! get directly from basin
@@ -1613,11 +1611,13 @@ c*******************************************************************
 
 	call get_coords_ev(isphe)
 
-        write(6,*) 'setting for coordinates: isphe = ',isphe
-        if( isphe .eq. 0 ) then
-          write(6,*) 'using cartesian coordinates'
-        else
-          write(6,*) 'using lat/lon coordinates'
+        if(shympi_is_master()) then
+          write(6,*) 'setting for coordinates: isphe = ',isphe
+          if( isphe .eq. 0 ) then
+            write(6,*) 'using cartesian coordinates'
+          else
+            write(6,*) 'using lat/lon coordinates'
+          end if
         end if
 
         end

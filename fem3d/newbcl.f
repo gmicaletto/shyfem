@@ -84,6 +84,8 @@ c
 	use mod_hydro
 	use levels
 	use basin
+        use shympi
+        use mod_mpi_io
 
 	implicit none
 c
@@ -279,17 +281,34 @@ c		--------------------------------------------
 		nvar = 0
 		if( itemp .gt. 0 ) nvar = nvar + 1
 		if( isalt .gt. 0 ) nvar = nvar + 1
-
 		call init_output('itmcon','idtcon',ia_out)
 		if( ishyff == 1 ) ia_out = 0
 		if( has_output(ia_out) ) then
 		  call open_scalar_file(ia_out,nlv,nvar,'nos')
 		  if( next_output(ia_out) ) then
 		    if( isalt .gt. 0 ) then
-		      call write_scalar_file(ia_out,11,nlvdi,saltv)
+                      if(bmpi) then
+                        call rebuild_scalar('saltv',saltv)
+                        if(shympi_partition_on_elements()) then
+                          if(shympi_is_master()) then 
+		           call write_scalar_file(ia_out,11,nlvdi,outSaltv)
+                          end if
+                        end if
+                      else
+		        call write_scalar_file(ia_out,11,nlvdi,saltv)
+		      end if
 		    end if
 		    if( itemp .gt. 0 ) then
-		      call write_scalar_file(ia_out,12,nlvdi,tempv)
+                      if(bmpi) then
+                        call rebuild_scalar('tempv',tempv)
+                        if(shympi_partition_on_elements()) then
+                          if(shympi_is_master()) then
+		          call write_scalar_file(ia_out,12,nlvdi,outTempv)
+                          end if
+                        end if
+                      else
+		        call write_scalar_file(ia_out,12,nlvdi,tempv)
+		      end if
 		    end if
 		  end if
 		end if
@@ -308,7 +327,7 @@ c		--------------------------------------------
 		      call shy_write_scalar_record(id,dtime,12,nlvdi,tempv)
 		    end if
 		  end if
-		end if
+                end if
 
                 call getinfo(ninfo)
 
@@ -389,17 +408,25 @@ c----------------------------------------------------------
 
 	if( binfo ) then
           if( itemp .gt. 0 ) then
-  	    call tsmass(tempv,+1,nlvdi,ttot) 
+  	    call tsmass(tempv,+1,nlvdi,ttot)
+            !tmin=shympi_min(tempv)
+            !tmax=shympi_max(tempv) 
       	    call conmima(nlvdi,tempv,tmin,tmax)
 !$OMP CRITICAL
-  	    write(ninfo,*) 'temp: ',it,ttot,tmin,tmax
+            if(shympi_is_master()) then
+  	      write(ninfo,*) 'temp: ',it,ttot,tmin,tmax
+            end if
 !$OMP END CRITICAL
 	  end if
           if( isalt .gt. 0 ) then
   	    call tsmass(saltv,+1,nlvdi,stot) 
+            !smin=shympi_min(saltv)
+            !smax=shympi_max(saltv) 
        	    call conmima(nlvdi,saltv,smin,smax)
 !$OMP CRITICAL
-  	    write(ninfo,*) 'salt: ',it,stot,smin,smax
+            if(shympi_is_master()) then
+  	      write(ninfo,*) 'salt: ',it,stot,smin,smax
+            end if
 !$OMP END CRITICAL
 	  end if
 	end if
@@ -420,9 +447,9 @@ c----------------------------------------------------------
 c compute min/max
 c----------------------------------------------------------
 
-	call stmima(saltv,nkn,nlvdi,ilhkv,smin,smax)
-	call stmima(tempv,nkn,nlvdi,ilhkv,tmin,tmax)
-	call stmima(rhov,nkn,nlvdi,ilhkv,rmin,rmax)
+	!call stmima(saltv,nkn,nlvdi,ilhkv,smin,smax)
+	!call stmima(tempv,nkn,nlvdi,ilhkv,tmin,tmax)
+	!call stmima(rhov,nkn,nlvdi,ilhkv,rmin,rmax)
 
 c----------------------------------------------------------
 c write results to file
@@ -430,10 +457,26 @@ c----------------------------------------------------------
 
 	if( next_output(ia_out) ) then
 	  if( isalt .gt. 0 ) then
-	    call write_scalar_file(ia_out,11,nlvdi,saltv)
+            if(bmpi) then
+              call rebuild_scalar('saltv',saltv)
+              if(shympi_is_master() .and. 
+     +        shympi_partition_on_elements())then
+	        call write_scalar_file(ia_out,11,nlvdi,outSaltv)
+              end if
+            else
+	      call write_scalar_file(ia_out,11,nlvdi,saltv)
+            end if
 	  end if
 	  if( itemp .gt. 0 ) then
-	    call write_scalar_file(ia_out,12,nlvdi,tempv)
+            if(bmpi) then
+              call rebuild_scalar('tempv',tempv)
+              if(shympi_is_master() .and. 
+     +        shympi_partition_on_elements())then
+	        call write_scalar_file(ia_out,12,nlvdi,outTempv)
+              end if
+            else
+	      call write_scalar_file(ia_out,12,nlvdi,tempv)
+	    end if
 	  end if
 	end if
 
@@ -821,6 +864,12 @@ c*******************************************************************
 
 c initialization of T/S from file
 
+        use shympi
+        use intp_fem_file
+        use levels, only: nlvdi
+        use basin, only: nkndi,nel
+        use mod_mpi_io
+
 	implicit none
 
 	include 'param.h'
@@ -836,29 +885,66 @@ c initialization of T/S from file
 
         integer itt,its
         integer iutemp(3),iusalt(3)
+        !integer ierr
+        !integer hlv_dim
+        integer date,time
 
 	call getfnm('tempin',tempf)
 	call getfnm('saltin',saltf)
 
+        if(bmpi .and. ((tempf .ne. ' ') .or. (saltf .ne. ' '))) then
+          call shympi_ts_init(ilhkv_fem,hk_fem,he_fem,hlv_fem,
+     +                 nkn_fem,nel_fem,nlv_fem)
+        end if
+
 	if( tempf .ne. ' ' ) then
 	  itt = it0
-	  write(6,*) 'ts_init: opening file for T'
-	  call ts_file_open(tempf,itt,nkn,nlv,iutemp)
+          if(shympi_is_master()) then
+	    write(6,*) 'ts_init: opening file for T'
+          end if
+	  call ts_file_open(tempf,itt,nkndi,nlvdi,iutemp)
 	  call ts_file_descrp(iutemp,'temp init')
-          call ts_next_record(itt,iutemp,nlvddi,nkn,nlv,tempv)
+
+          if(bmpi) then
+            call ts_next_record(itt,iutemp,nlvddi,nkndi,nlvdi,inTempv)
+          else
+            call ts_next_record(itt,iutemp,nlvddi,nkndi,nlvdi,tempv)
+          end if
+
 	  call ts_file_close(iutemp)
-          write(6,*) 'temperature initialized from file ',tempf
+          if(shympi_is_master()) then
+            write(6,*) 'temperature initialized from file ',tempf
+	  end if
 	end if
 
 	if( saltf .ne. ' ' ) then
 	  its = it0
-	  write(6,*) 'ts_init: opening file for S'
-	  call ts_file_open(saltf,its,nkn,nlv,iusalt)
+          if(shympi_is_master()) then
+	    write(6,*) 'ts_init: opening file for S'
+          end if
+	  call ts_file_open(saltf,its,nkndi,nlvdi,iusalt)
 	  call ts_file_descrp(iusalt,'salt init')
-          call ts_next_record(its,iusalt,nlvddi,nkn,nlv,saltv)
+
+          if(bmpi) then
+            call ts_next_record(its,iusalt,nlvddi,nkndi,nlvdi,inSaltv)
+          else
+            call ts_next_record(its,iusalt,nlvddi,nkndi,nlvdi,saltv)
+          end if
+
 	  call ts_file_close(iusalt)
-          write(6,*) 'salinity initialized from file ',saltf
+          if(shympi_is_master()) then
+            write(6,*) 'salinity initialized from file ',saltf
+	  end if
 	end if
+
+        if(bmpi .and. ((tempf .ne. ' ') .or. (saltf .ne. ' '))) then
+          call compute_my_tracer(inTempv,tempv)
+          call compute_my_tracer(inSaltv,saltv)
+          deallocate(inTempv)
+          deallocate(inSaltv)
+          nkn_fem = nkn  ! mynodes = nkn
+          nel_fem = nel    ! myelements = nel
+        end if
 
 	end
 

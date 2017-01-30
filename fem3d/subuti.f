@@ -356,6 +356,8 @@ c***************************************************************
 
 c computes min/max of 3d field
 
+        use shympi
+
         implicit none
 
 c arguments
@@ -376,6 +378,9 @@ c local
             if(a(l,k).lt.amin) amin=a(l,k)
           end do
         end do
+
+        amin = shympi_min(amin)
+        amax = shympi_max(amax)
 
         end
 

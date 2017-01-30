@@ -60,13 +60,13 @@ COMPILER_PROFILE = NORMAL
 ##############################################
 
 #FORTRAN_COMPILER = GNU_G77
-FORTRAN_COMPILER = GNU_GFORTRAN
-#FORTRAN_COMPILER = INTEL
+#FORTRAN_COMPILER = GNU_GFORTRAN
+FORTRAN_COMPILER = INTEL
 #FORTRAN_COMPILER = PORTLAND
 #FORTRAN_COMPILER = IBM
 
-C_COMPILER = GNU_GCC
-#C_COMPILER = INTEL
+#C_COMPILER = GNU_GCC
+C_COMPILER = INTEL
 #C_COMPILER = IBM
 
 ##############################################
@@ -104,8 +104,8 @@ PARALLEL_OMP = false
 #PARALLEL_OMP = true
 
 #PARALLEL_MPI = NONE
-PARALLEL_MPI = NODE
-#PARALLEL_MPI = ELEM
+#PARALLEL_MPI = NODE
+PARALLEL_MPI = ELEM
 
 ##############################################
 # Solver for matrix solution
@@ -135,7 +135,7 @@ SOLVER=SPARSKIT
 # Zoltan library
 ###############################################
 # Library needs for MPI implementation
-# this library allow you to partition the
+# this library allow to partition the
 # domain between the various processes
 ###############################################
 
@@ -149,6 +149,27 @@ ifeq ($(FORTRAN_COMPILER),INTEL)
 endif
 
 ##############################################
+# PETSC and MUMPS library
+##############################################
+# this library are used for parallel execution
+# of the linear system if you enable petsc 
+# disable mumps and vice versa, one excludes
+# the other
+##############################################
+
+PETSC = false
+#PETSC = true
+#PETSCDIR = /users/home/ib04116/petsc-3.7.1
+#PETSCDIR = /users/home/sco116/petsc/petsc_debug
+#PETSCDIR = /users/home/sco116/petsc/petsc
+#PETSCDIR = /users/home/sco116/petsc/test/petsc-3.7.1
+#PETSCDIR = /users/home/sco116/petsc/petsc-3.7.4
+#PETSCDIR = /users/home/sco116/petsc/petsc_valg
+#PETSCDIR = /users/home/sco116/PETSC/test/petsc-3.7.4
+#PETSCDIR = /users/home/sco116/PETSC/petsc/petsc-3.7.4
+PETSCDIR = /users/home/sco116/PETSC/2015/petsc-3.7.4
+
+##############################################
 # NetCDF library
 ##############################################
 #
@@ -159,10 +180,10 @@ endif
 #
 ##############################################
 
-NETCDF = false
-#NETCDF = true
+#NETCDF = false
+NETCDF = true
 #NETCDFDIR = /usr/local/netcdf
-NETCDFDIR = /usr
+NETCDFDIR = /users/home/opt/netcdf/netcdf-4.3
 
 ##############################################
 # GOTM library
@@ -295,8 +316,8 @@ endif
 #PROFILE = true
 PROFILE = false
 
-DEBUG = true
-#DEBUG = false
+#DEBUG = true
+DEBUG = false
 
 OPTIMIZE = MEDIUM
 #OPTIMIZE = HIGH
@@ -598,6 +619,8 @@ endif
 
 FINTEL_OPT   = -O -mcmodel=large
 FINTEL_OPT   = -O 
+FINTEL_OPT   = -O3 -xHost -fp-model source -fpp
+#FINTEL_OPT   = -O3 -fpp -DUSE_MPI 
 ifeq ($(OPTIMIZE),HIGH)
   FINTEL_OPT   = -O3
   #FINTEL_OPT   = -O3 -mcmodel=medium

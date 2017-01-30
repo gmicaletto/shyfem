@@ -27,7 +27,8 @@ c writes and administers ous file
 	use mod_hydro
 	use levels
 	use shympi
-	use basin, only : nkn,nel,ngr,mbw
+	use basin, only : nkn,nel,ngr,mbw,nkndi,neldi
+        use mod_mpi_io
 
 	implicit none
 
@@ -64,6 +65,14 @@ c writes and administers ous file
 
 	if( icall .eq. -1 ) return
 
+        if(shympi_partition_on_nodes()) return
+
+        if(bmpi) then
+	  if( icall .eq. 0 ) then
+            call rebuild_ous_header    
+          end if
+        end if
+
 	if( icall .eq. 0 ) then
 		ia_out = 0
 		da_out = 0.
@@ -76,9 +85,9 @@ c writes and administers ous file
      +			.not. has_output_d(da_out) ) icall = -1
 		if( icall .eq. -1 ) return
 		
-		if( shympi_is_parallel() ) then
-		  stop 'error stop wrousa: not mpi ready'
-		end if
+		!if( shympi_is_parallel() ) then
+		!  stop 'error stop wrousa: not mpi ready'
+		!end if
 
 		if( has_output_d(da_out) ) then
 		  nvar = 4
@@ -94,6 +103,8 @@ c writes and administers ous file
 		if(nbout.le.0) goto 77
 		ia_out(4) = nbout
 
+                if(shympi_is_master()) then
+
 		href=getpar('href')             !reference level
 		hzoff=getpar('hzoff')           !minimum depth
 	        date = nint(dgetpar('date'))
@@ -106,10 +117,16 @@ c writes and administers ous file
 	        call ous_set_date(nbout,date,time)
 	        call ous_set_femver(nbout,femver)
 	        call ous_set_hparams(nbout,href,hzoff)
-	        call ous_write_header(nbout,nkn,nel,nlv,ierr)
+	        call ous_write_header(nbout,nkndi,neldi,nlvdi,ierr)
 	        if(ierr.gt.0) goto 78
-	        call ous_write_header2(nbout,ilhv,hlv,hev,ierr)
+                if(bmpi) then
+	          call ous_write_header2(nbout,outIlhv,hlv,outHev,ierr) 
+                else
+	          call ous_write_header2(nbout,ilhv,hlv,hev,ierr)
+                end if
 	        if(ierr.gt.0) goto 75
+
+                end if
 
 		end if
 	end if
@@ -117,16 +134,30 @@ c writes and administers ous file
 	icall = icall + 1
 
 	if( next_output(ia_out) ) then
+          if(bmpi) then
+            call rebuild_structures
+	    if(shympi_is_master()) then
+	     call ous_write_record(nbout,it,nlvdi,outIlhv,outZnv,outZenv
+     +					,outUtlnv,outVtlnv,ierr)
+	     if(ierr.ne.0.) goto 79
+            end if
+          else
 	  call ous_write_record(nbout,it,nlvdi,ilhv,znv,zenv
      +					,utlnv,vtlnv,ierr)
 	  if(ierr.ne.0.) goto 79
+          end if
 	end if
 
 	if( next_output_d(da_out) ) then
-	  id = nint(da_out(4))
-	  dtime = t_act
-	  call shy_write_hydro_records(id,dtime,nlvdi,znv,zenv
-     +					,utlnv,vtlnv)
+          if(bmpi) then
+            call rebuild_structures
+          end if
+	  if(shympi_is_master()) then
+	    id = nint(da_out(4))
+	    dtime = t_act
+	    call shy_write_hydro_records(id,dtime,nlvdi,outZnv,outZenv
+     +					,outUtlnv,outVtlnv)
+	  end if
 	end if
 
 	return

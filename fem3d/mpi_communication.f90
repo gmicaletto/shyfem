@@ -5,27 +5,27 @@ module mpi_communication
    use shympi
    use mpi_common_struct
 
-   interface exchange_struct_2D
-      module procedure exchange_struct_2D_i  &
-                       ,exchange_struct_2D_r &
-                       ,exchange_struct_2D_d
-   end interface exchange_struct_2D
+   interface exchange_struct_2d
+      module procedure exchange_struct_2d_i  &
+                       ,exchange_struct_2d_r &
+                       ,exchange_struct_2d_d
+   end interface exchange_struct_2d
 
-   interface rebuild_struct_2D_sum
-      module procedure rebuild_struct_2D_sum_i  &
-                       ,rebuild_struct_2D_sum_r &
-                       ,rebuild_struct_2D_sum_d
-   end interface rebuild_struct_2D_sum
+   interface rebuild_struct_2d_sum
+      module procedure rebuild_struct_2d_sum_i  &
+                       ,rebuild_struct_2d_sum_r &
+                       ,rebuild_struct_2d_sum_d
+   end interface rebuild_struct_2d_sum
 
-   interface exchange_struct_3D
-      module procedure exchange_struct_3D_r &
-                       ,exchange_struct_3D_d
-   end interface exchange_struct_3D
+   interface exchange_struct_3d
+      module procedure exchange_struct_3d_r &
+                       ,exchange_struct_3d_d
+   end interface exchange_struct_3d
 
-   interface rebuild_struct_3D_sum
-      module procedure rebuild_struct_3D_sum_r &
-                       ,rebuild_struct_3D_sum_d
-   end interface rebuild_struct_3D_sum
+   interface rebuild_struct_3d_sum
+      module procedure rebuild_struct_3d_sum_r &
+                       ,rebuild_struct_3d_sum_d
+   end interface rebuild_struct_3d_sum
 
 
 
@@ -98,7 +98,7 @@ module mpi_communication
 !* others processes                                                       *!
 !##########################################################################!
 
-     subroutine exchange_struct_2D_r(struct, mode, srequests, rrequests, data_send, data_receive)
+     subroutine exchange_struct_2d_r(struct, mode, srequests, rrequests, data_send, data_receive)
         
         use basin
 
@@ -259,7 +259,7 @@ module mpi_communication
 !* to/from others processes                                               *!
 !##########################################################################!
 
-     subroutine exchange_struct_2D_d(struct, mode, srequests, rrequests, data_send, data_receive)
+     subroutine exchange_struct_2d_d(struct, mode, srequests, rrequests, data_send, data_receive)
         
         use basin
 
@@ -422,7 +422,7 @@ module mpi_communication
 !* others processes                                                       *!
 !##########################################################################!
 
-     subroutine exchange_struct_2D_i(struct, mode, srequests, rrequests, data_send, data_receive)
+     subroutine exchange_struct_2d_i(struct, mode, srequests, rrequests, data_send, data_receive)
         
         use basin
 
@@ -583,7 +583,7 @@ module mpi_communication
 !* others processes                                                       *!
 !##########################################################################!
 
-     subroutine exchange_struct_3D_r(struct, size1, mode, srequests, rrequests, data_send, data_receive)
+     subroutine exchange_struct_3d_r(struct, size1, mode, srequests, rrequests, data_send, data_receive)
         
         implicit none
 
@@ -601,15 +601,19 @@ module mpi_communication
 
         ! MPI
         integer ierr, data_type
-        integer, dimension(:) :: srequests,rrequests
+        !integer, dimension(:) :: srequests,rrequests
+        integer srequests(mypart%mysend%sends)
+        integer rrequests(mypart%mysend%sends)
 
         comm_loop = mypart%mysend%sends
         data_type = MPI_REAL
 
         newtag = next_mpi_tag()
-
-        allocate(data_send(size1,mypart%mysend%maxItems,comm_loop))
-        allocate(data_receive(size1,mypart%myreceive%maxItems,comm_loop))
+        
+        if(.not. allocated(data_send)) then
+          allocate(data_send(size1,mypart%mysend%maxItems,comm_loop))
+          allocate(data_receive(size1,mypart%myreceive%maxItems,comm_loop))
+        end if
 
         if(mode .eq. 1) then
 
@@ -736,7 +740,7 @@ module mpi_communication
 !* others processes                                                       *!
 !##########################################################################!
 
-     subroutine exchange_struct_3D_d(struct, size1, mode, srequests, rrequests, data_send, data_receive)
+     subroutine exchange_struct_3d_d(struct, size1, mode, srequests, rrequests, data_send, data_receive)
         
         implicit none
 
@@ -1036,14 +1040,14 @@ module mpi_communication
 
 
 !##########################################################################!
-!**********************  start send_recv_real3D_data  *********************!
+!**********************  start send_recv_real3d_data  *********************!
 !##########################################################################!
 !##########################################################################!
 !* This subroutine is usefull for send or/and receve real data to/from    *!
 !* others processes                                                       *!
 !##########################################################################!
 
-     subroutine send_recv_real3D_data(struct,size1,size2,mode,srequests,rrequests,data_send,data_receive)
+     subroutine send_recv_real3d_data(struct,size1,size2,mode,srequests,rrequests,data_send,data_receive)
 
         implicit none
 
@@ -1186,7 +1190,7 @@ module mpi_communication
 
 
         else
-           write(6,*)'error in send_recv_real3D_data', mode
+           write(6,*)'error in send_recv_real3d_data', mode
            stop
         end if
 
@@ -1394,7 +1398,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_max_i(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_max_i(struct,data_receive,mode)
 
 
         implicit none
@@ -1456,7 +1460,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_max_r(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_max_r(struct,data_receive,mode)
 
 
         implicit none
@@ -1518,7 +1522,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_min_i(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_min_i(struct,data_receive,mode)
 
 
         implicit none
@@ -1581,7 +1585,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_min_r(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_min_r(struct,data_receive,mode)
 
 
         implicit none
@@ -1644,7 +1648,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_sum_r(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_sum_r(struct,data_receive,mode)
 
 
         implicit none
@@ -1696,7 +1700,7 @@ module mpi_communication
            end do
 
         else
-           write(6,*)'error in Rebuild_struct_2D_sum, mode=',mode
+           write(6,*)'error in Rebuild_struct_2d_sum, mode=',mode
         end if
         
 
@@ -1707,7 +1711,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_sum_d(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_sum_d(struct,data_receive,mode)
 
 
         implicit none
@@ -1772,7 +1776,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_2D_sum_i(struct,data_receive,mode)
+    subroutine rebuild_struct_2d_sum_i(struct,data_receive,mode)
 
 
         implicit none
@@ -1835,7 +1839,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_3D_sum_r(struct,size1,data_receive,mode)
+    subroutine rebuild_struct_3d_sum_r(struct,size1,data_receive,mode)
 
 
         implicit none
@@ -1904,7 +1908,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_3D_sum_d(struct,size1,data_receive,mode)
+    subroutine rebuild_struct_3d_sum_d(struct,size1,data_receive,mode)
 
 
         implicit none
@@ -1973,7 +1977,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_3D_2xSum_r(struct,size1,data_receive,mode)
+    subroutine rebuild_struct_3d_2xSum_r(struct,size1,data_receive,mode)
 
 
         implicit none
@@ -2042,7 +2046,7 @@ module mpi_communication
 
 !================================================================
 
-    subroutine rebuild_struct_3D_2xSum_d(struct,size1,data_receive,mode)
+    subroutine rebuild_struct_3d_2xSum_d(struct,size1,data_receive,mode)
 
 
         implicit none
@@ -2245,7 +2249,7 @@ module mpi_communication
     end subroutine
 
 
-    subroutine rebuild_Real3D_Halo(struct,size1,size2,data_receive,mode)
+    subroutine rebuild_Real3d_Halo(struct,size1,size2,data_receive,mode)
 
 
         implicit none
@@ -2318,7 +2322,7 @@ module mpi_communication
            end do
 
         else
-           write(6,*)'error in rebuild_Real3D_Halo, mode=',mode
+           write(6,*)'error in rebuild_Real3d_Halo, mode=',mode
         end if
         
 

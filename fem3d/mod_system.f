@@ -60,6 +60,8 @@
 
         integer, allocatable, save :: i2coo(:)
         integer, allocatable, save :: j2coo(:)
+        integer, allocatable, save :: i2coo_pet(:)
+        integer, allocatable, save :: j2coo_pet(:)
         double precision, allocatable, save :: c2coo(:)
 
         integer, allocatable, save :: i3coo(:)
@@ -104,7 +106,6 @@
           deallocate(is2v)
 
           deallocate(rvec2d)
-          deallocate(raux2d)
           deallocate(rvec3d)
           deallocate(raux3d)
 
@@ -114,6 +115,8 @@
 
           deallocate(i2coo)
           deallocate(j2coo)
+          deallocate(i2coo_pet)
+          deallocate(j2coo_pet)
           deallocate(c2coo)
 
           deallocate(i3coo)
@@ -157,6 +160,8 @@
 
         allocate(i2coo(n2max))
         allocate(j2coo(n2max))
+        allocate(i2coo_pet(n2max))
+        allocate(j2coo_pet(n2max))
         allocate(c2coo(n2max))
 
         allocate(i3coo(n3max))

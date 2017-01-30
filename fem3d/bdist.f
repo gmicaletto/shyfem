@@ -36,6 +36,8 @@ c   row i:   1   2   3   4   5   6   7   8   ...
 c   rdist:   0   0  1/4 2/4 3/4  1   1   1   ...
 
 	use basin
+        use shympi
+        use mod_mpi_io
 
 	implicit none
 
@@ -100,8 +102,15 @@ c-----------------------------------------------------------------
 c-----------------------------------------------------------------
 c write dist (nos) file
 c-----------------------------------------------------------------
- 
-        call wrnos2d('dist','distance from boundary nodes',rdist)
+
+        if(shympi_partition_on_elements()) then
+          call rebuild_2d_nodes(rdist,outRdist)
+          if(shympi_is_master()) then 
+           call wrnos2d('dist','distance from boundary nodes',outRdist)
+          end if
+        else
+          call wrnos2d('dist','distance from boundary nodes',rdist)
+        end if
 
 c-----------------------------------------------------------------
 c end of routine

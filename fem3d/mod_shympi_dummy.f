@@ -177,6 +177,17 @@
 
 !******************************************************************
 
+        subroutine shympi_reduce_d_internal(what,val)
+        
+        implicit none
+
+        character*(*) what
+        real val
+
+        end subroutine shympi_reduce_d_internal
+
+!******************************************************************
+
         subroutine shympi_reduce_i_internal(what,val)
         
         implicit none

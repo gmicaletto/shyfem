@@ -1030,8 +1030,7 @@ c computes content of water mass in total domain
 	double precision masscont
 	integer mode
 
-	integer k,l,nlev,ntot,j
-	real mass
+	integer k,l,nlev,ntot
 	double precision total
         real volnode
 
@@ -1050,9 +1049,9 @@ c computes content of water mass in total domain
 	  end do
 	end do
 
-	mass = total
-	mass = shympi_sum(mass)
-	masscont = mass
+        total = shympi_sum(total)
+
+	masscont = total
 
 	end
 
@@ -1073,7 +1072,7 @@ c computes content of scalar in total domain
 	real scal(nlvdi,nkn)
 
 	logical bdebug
-	integer k,l,nlev,ntot,j
+	integer k,l,nlev,ntot
 	double precision total
         real volnode
 
@@ -1096,7 +1095,8 @@ c computes content of scalar in total domain
 	  end do
 	end do
 
-	scalcont = total
+        !call shympi_comment('shympi_sum: scalcont')
+	scalcont = shympi_sum(total)
 
 	end
 

@@ -242,7 +242,7 @@ contains
 
     ! arguments
     integer nel
-    integer ieltv(3,1)
+    integer ieltv(3,nel)
     type (IELTV_GRID) :: ieltGrid
 
     ! local
@@ -314,6 +314,7 @@ contains
         integer, dimension(:,:), allocatable :: mystruct
         integer h
         integer temp_nkn, temp_nel
+        logical temp_part
 
         nel = 0
         do i=1,neldi
@@ -322,13 +323,13 @@ contains
           end if
         end do
 
-        write(6,*)'myElements =',nel,neldi,my_id
+        !write(6,*)'myElements =',nel,neldi,my_id
 
         call makeMyEle2(nel,neldi,nen3v)
 
         allocate(mystruct(3,myele%numberID))
 
-        call makeMyStruct(myele, nen3v, mystruct, 3)
+        call makeMyStruct(myele, nen3v, mystruct, 3, neldi)
 
         call makeMyNodes2(myele, mystruct, mynodes, nen3v, nkndi)
 
@@ -370,55 +371,28 @@ contains
         call mkkant(nkn,ilinkv,lenkv,linkv,kantv,repart)
         call mkielt(nkn,nel,ilinkv,lenkv,linkv,ieltv,repart)
 
-        call MPI_ALLREDUCE(repart, repart, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+        call MPI_ALLREDUCE(repart, temp_part, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+        repart=temp_part
 
         if((repart) .and. (phg_method .eq. 'AGG')) then
           nel = neldi
           nkn = nkndi
           deallocate(nen3v)
-          !deallocate(hm3v)
-          !deallocate(ipv)
-          !deallocate(ipev)
-          !deallocate(iarv)
-          !deallocate(iarnv)
-          !deallocate(xgv)
-          !deallocate(ygv)
-          if(my_id .eq. 0) deallocate(allNodesAssign)
           deallocate(mypart%mysend%node_send)
           deallocate(numberElements)
           deallocate(numberNodes)
           deallocate(myele%globalID)
           deallocate(mynodes%globalID)
           allocate(nen3v(3,neldi))
-          !allocate(hm3v(3,neldi))
-          !allocate(ipv(nkndi))
-          !allocate(ipev(neldi))
-          !allocate(iarv(neldi))
-          !allocate(iarnv(nkndi))
-          !allocate(xgv(nkndi))
-          !allocate(ygv(nkndi))
           nen3v=tempNen3v
-          !hm3v=tempHm3v
-          !ipv=tempIpv
-          !ipev=tempIpev
-          !iarv=tempIarv
-          !iarnv=tempIarnv
-          !xgv=tempXgv
-          !ygv=tempYgv
-        
           call mod_geom_init(nkndi,neldi,ngr)
           ieltv=temp_ieltv
           ilhv=temp_ilhv
           linkv=temp_linkv
           lenkv=temp_lenkv
           ilinkv=temp_ilinkv
-          !lenkiiv=temp_lenkiiv
-          !kantv=temp_kantv
-          
-          !call shypart_setup
           write(6,*)'recall partPHG',my_id
           return
-          !call partPHG
         else if((repart) .and. (phg_method .eq. 'IPM')) then
           if(my_id .eq. 0) then
             write(6,*)'tried partitioning with',n_threads,' processes'
@@ -439,17 +413,6 @@ contains
 !* on the elements of a subprocess(global ID elements, rank ID process *!
 !* neighbor, globalID neighbor elements, etc.)                         *!
 !#######################################################################!
-!######################################################################################################!
-! n = local ID of the Elements number(numMyVertices)                                                   !
-!                        <---------- n --------->                                                      !
-! myele%globalID         |||||||||||||||||||||||| globalID of the element                              !
-! myele%rankID(1,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !   
-! myele%rankID(2,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! myele%rankID(3,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! myele%neighborID(1,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! myele%neighborID(2,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! myele%neighborID(3,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-!######################################################################################################!
 
   subroutine makeMyEle2(numMyVertices, numGlobalVertices, struct)
 
@@ -616,17 +579,6 @@ contains
 !***  on the nodes of a subprocess(global ID nodes, rank ID process  ***!
 !*****          neighbor, globalID neighbor nodes, etc.)           *****!
 !#######################################################################!
-!########################################################################################################!
-! n = local ID of the node number                                                                        !
-!                          <---------- n --------->                                                      !
-! mynodes%globalID         |||||||||||||||||||||||| globalID of the node                                 !
-! mynodes%rankID(1,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !   
-! mynodes%rankID(2,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! mynodes%rankID(3,*)      |||||||||||||||||||||||| contains the rankID of the process to export data    !  
-! mynodes%neighborID(1,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! mynodes%neighborID(2,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-! mynodes%neighborID(3,*)  |||||||||||||||||||||||| contains the global neighbor ID to which import data !
-!########################################################################################################!
 
   subroutine makeMyNodes2(myele, mystruct, mynodes, struct, nkn)
 
@@ -639,8 +591,7 @@ contains
     ! rank process, number of my elements
 
     integer nkn
-    integer mystruct(3,1)
-    integer, dimension(:,:) :: struct
+    integer, dimension(:,:) :: struct,mystruct
     integer, dimension(:), allocatable :: neighbor, sort_neighbor, sort_nodes
     integer, dimension(:), allocatable :: fullNodesAssign
     integer, dimension(n_threads) :: recvbuffer, displs
@@ -656,7 +607,6 @@ contains
     character*(20) format_string
     integer sendbuffer2
     integer, dimension(n_threads) :: recvbuffer2, displs2
-    integer maxNodes
 
     integer, dimension(:,:),allocatable :: data_recv
     integer, dimension(:),allocatable :: sreqArray
@@ -704,7 +654,7 @@ contains
 
     mynodes%numberID = length
 
-    write(6,*)'myNodes =',mynodes%numberID,nkndi,my_id
+   ! write(6,*)'myNodes =',mynodes%numberID,nkndi,my_id
 
     call MPI_ALLREDUCE(mynodes%numberID, maxNodes, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
 
@@ -731,36 +681,6 @@ contains
     if(my_id .eq. 0)then
       write(6,*)'totalNodes=',totalNodes
     end if
-
-    if(.not. allocated(allNodesAssign)) then
-      allocate(allNodesAssign(n_threads,nkndi))
-    else
-      deallocate(allNodesAssign)
-      allocate(allNodesAssign(n_threads,nkndi))
-    end if
-
-    if(.not. allocated(fullNodesAssign)) then
-      allocate(fullNodesAssign(totalNodes))
-    else
-      deallocate(fullNodesAssign)
-      allocate(fullNodesAssign(totalNodes))
-    end if
-
-    do i=1,n_threads
-      recvbuffer(i) = numberNodes(i)
-    end do
-
-    sendbuffer = numberNodes(my_id+1)
-
-    displs(1) = 0
-    do i=2,n_threads
-      displs(i) = displs(i-1) + numberNodes(i-1)
-    end do
-
-    call MPI_ALLGATHERV(sort_nodes, sendbuffer, MPI_INTEGER, fullNodesAssign, recvbuffer, displs, MPI_INTEGER, MPI_COMM_WORLD, ierr)
-
-    call makeNodesAssign(fullNodesAssign, nkn, n_threads)
-    deallocate(fullNodesAssign)
 
     allocate(mypart%mysend%node_temp(mypart%mysend%sends))
     do h=1,mypart%mysend%sends
@@ -809,10 +729,6 @@ contains
 
     deallocate(data_recv)
 
-    if(my_id .ne. 0) then
-      deallocate(allNodesAssign)
-    end if
-
     do h=1,mypart%mysend%sends
        deallocate(mypart%mysend%node_temp(h)%items)
     end do
@@ -825,39 +741,6 @@ contains
 
   end subroutine
 
-  
-  subroutine makeNodesAssign(fullNodesAssign, nkn, n_threads)
-
-    use mpi_common_struct
-
-    implicit none
-
-    integer, dimension(totalNodes) :: fullNodesAssign
-!    integer, dimension(n_threads,nkn) :: allNodesAssign
-!    integer totalNodes, i, j, node, nkn, n_threads
-    integer i, j, node, nkn, n_threads
-    integer, dimension(n_threads) :: offset
-
-
-    offset(1) = 0
-    do i=1, n_threads
-      do j=1,nkn
-        allNodesAssign(i,j) = -1
-      end do
-      if(i .gt. 1) then
-        offset(i) = offset(i-1) + numberNodes(i-1)
-      end if
-      do j=1, numberNodes(i)
-        node = fullNodesAssign(offset(i)+j)
-        allNodesAssign(i,node) = 1 
-      end do
-    end do
-   
-    return
-
-  end subroutine
-
-
 !######################################################################!
 !*******************  start makeMyStruct subroutine  ******************!
 !######################################################################!
@@ -866,7 +749,7 @@ contains
 !***  between main structure and local structure to a process  ********!
 !######################################################################!
 
-  subroutine makeMyStruct(infoStruct, struct, mystruct, mysize)
+  subroutine makeMyStruct(infoStruct, struct, mystruct, mysize ,nel)
 
 !   infoStruct is a data structure with information on the comunication
 !   that allows to make a mapping between a element/node of the struct
@@ -877,11 +760,11 @@ contains
 
     implicit none
     ! input arguments
-    integer mysize, mode
+    integer mysize, mode,nel
 !    integer struct(mysize,1)
     type (COMMUNICATION_INFO) :: infoStruct
-    integer, dimension(mysize,1) :: struct
-    integer, dimension(mysize,1) :: mystruct
+    integer, dimension(mysize,nel) :: struct
+    integer, dimension(mysize,infoStruct%numberID) :: mystruct
     integer :: st(MPI_STATUS_SIZE), ierr
 
     ! output arguments
@@ -1150,7 +1033,7 @@ contains
          temp = res(h-1)
          res(h-1) = res(h)
          res(h) = temp
-         if(h .eq. 1) exit
+         if(h .eq. 2) exit
          h = h-1
        end do
 
@@ -1209,7 +1092,7 @@ contains
          temp = res(h-1)
          res(h-1) = res(h)
          res(h) = temp
-         if(h .eq. 1) exit
+         if(h .eq. 2) exit
          h = h-1
        end do
 

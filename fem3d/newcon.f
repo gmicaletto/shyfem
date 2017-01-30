@@ -509,9 +509,6 @@ c-------------------------------------------------------------
 c start of routine
 c-------------------------------------------------------------
 
-        gradxv = 0.
-        gradyv = 0.
-
 c-------------------------------------------------------------
 c initialization
 c-------------------------------------------------------------
@@ -608,10 +605,10 @@ c-------------------------------------------------------------
 
 	end do
 
-        if( shympi_is_parallel() .and. istot > 1 ) then
-          write(6,*) 'cannot handle istot>1 with mpi yet'
-          stop 'error stop scal3sh: istot>1'
-        end if
+        !if( shympi_is_parallel() .and. istot > 1 ) then
+        !  write(6,*) 'cannot handle istot>1 with mpi yet'
+        !  stop 'error stop scal3sh: istot>1'
+        !end if
         !call shympi_comment('exchanging scalar: '//trim(what))
         call shympi_exchange_3d_node(cnv)
 
@@ -1477,7 +1474,7 @@ c local
 	integer itot,isum	!$$flux
 	logical berror
 	integer kn(3)
-        real sindex,rstol,raux
+        real sindex,rstol
 	double precision us,vs
 	double precision az,azt
 	double precision aa,aat,ad,adt
@@ -1828,6 +1825,15 @@ c clow is low (left) part of tri-diagonal system
 
 	end do		! loop over ie
 
+        if(shympi_partition_on_elements()) then
+          !call shympi_comment('shympi_elem: exchange and compute stabind')
+          call shympi_exchange_and_sum_3D_nodes(cn)
+          call shympi_exchange_and_sum_3D_nodes(co)
+          call shympi_exchange_and_sum_3D_nodes(cdiag)
+          call shympi_exchange_and_sum_3D_nodes(clow)
+          call shympi_exchange_and_sum_3D_nodes(chigh)
+        end if
+
 c-----------------------------------------------------------------
 c compute stability
 c
@@ -1897,9 +1903,7 @@ c		  end if
           end if
 	end do
 
-	raux = stabind			!FIXME - SHYFEM_FIXME
-        stabind = shympi_max(raux)
-        !call shympi_comment('stability_conz: shympi_max(stabind)')
+        stabind = shympi_max(stabind)
 
 c        write(6,*) 'stab check: ',nkn,nlv
 c        call check2Dr(nlvddi,nlv,nkn,cwrite,0.,0.,"NaN check","cstab")
@@ -1957,7 +1961,7 @@ c computes total mass of conc
 
 	use levels
 	use basin, only : nkn,nel,ngr,mbw
-	use shympi
+        use shympi
 
 	implicit none
 
@@ -1973,7 +1977,6 @@ c local
         double precision vol
 	double precision sum,masstot
 	real volnode
-        integer j
 
         masstot = 0.
 

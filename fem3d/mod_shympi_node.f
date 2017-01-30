@@ -37,6 +37,17 @@
 	integer,save :: n_ghost_max = 0
 	integer,save :: n_buffer = 0
 
+        integer, allocatable, save :: total_ieltv(:,:)
+        integer, allocatable, save :: sreq(:),rreq(:)
+        integer, allocatable, save :: sreq_ut(:),rreq_ut(:)
+        integer, allocatable, save :: sreq_vt(:),rreq_vt(:)
+        double precision, allocatable, save :: data_send_d(:,:,:)
+        double precision, allocatable, save :: data_recv_d(:,:,:)
+        real, allocatable, save :: data_send_ut(:,:,:)
+        real, allocatable, save :: data_recv_ut(:,:,:)
+        real, allocatable, save :: data_send_vt(:,:,:)
+        real, allocatable, save :: data_recv_vt(:,:,:)
+
 	integer,save,allocatable :: ghost_areas(:,:)
 	integer,save,allocatable :: ghost_nodes_in(:,:)
 	integer,save,allocatable :: ghost_nodes_out(:,:)
@@ -46,6 +57,8 @@
 	integer,save,allocatable :: i_buffer_out(:,:)
 	real,save,allocatable    :: r_buffer_in(:,:)
 	real,save,allocatable    :: r_buffer_out(:,:)
+	double precision,save,allocatable    :: d_buffer_in(:,:)
+	double precision,save,allocatable    :: d_buffer_out(:,:)
 	
 	integer,save,allocatable :: node_area(:)	!global
 	integer,save,allocatable :: request(:)		!for exchange
@@ -58,6 +71,18 @@
 	integer,save,allocatable :: id_elem(:,:)
 
         integer, allocatable, save, dimension(:) :: allPartAssign
+
+        INTERFACE send_halo
+        	MODULE PROCEDURE  
+     +			  send_halo_d
+     +			  ,send_halo_r
+        END INTERFACE
+
+        INTERFACE recv_halo
+        	MODULE PROCEDURE  
+     +			  recv_halo_d
+     +			  ,recv_halo_r
+        END INTERFACE
 
         INTERFACE shympi_exchange_3d_node
         	MODULE PROCEDURE  
@@ -165,20 +190,20 @@
         	MODULE PROCEDURE  
      +			   shympi_max_r
      +			  ,shympi_max_i
-!     +			  ,shympi_max_d
+     +			  ,shympi_max_d
      +			  ,shympi_max_0_r
      +			  ,shympi_max_0_i
-!     +			  ,shympi_max_0_d
+     +			  ,shympi_max_0_d
         END INTERFACE
 
         INTERFACE shympi_sum
         	MODULE PROCEDURE  
      +			   shympi_sum_r
      +			  ,shympi_sum_i
-!     +			  ,shympi_sum_d
+     +			  ,shympi_sum_d
      +			  ,shympi_sum_0_r
      +			  ,shympi_sum_0_i
-!     +			  ,shympi_sum_0_d
+     +			  ,shympi_sum_0_d
         END INTERFACE
 
         INTERFACE shympi_exchange_and_sum_3d_nodes
@@ -229,8 +254,11 @@
 	nel_inner = nel
 
 	bmpi = n_threads > 1
+
+        if(.not. bmpi) nel_global=neldi
+
         !if(bmpi) then
-	  !call check_part_basin('nodes')
+	  !call check_part_basin
         !end if
 
 	call shympi_get_status_size_internal(size)
@@ -315,6 +343,8 @@
           deallocate(i_buffer_out)
           deallocate(r_buffer_in)
           deallocate(r_buffer_out)
+          deallocate(d_buffer_in)
+          deallocate(d_buffer_out)
         end if
 
         n_buffer = n
@@ -324,6 +354,9 @@
 
         allocate(r_buffer_in(n_buffer,n_ghost_areas))
         allocate(r_buffer_out(n_buffer,n_ghost_areas))
+
+        allocate(d_buffer_in(n_buffer,n_ghost_areas))
+        allocate(d_buffer_out(n_buffer,n_ghost_areas))
 
         end subroutine shympi_alloc_buffer
 
@@ -740,6 +773,39 @@
 
 !******************************************************************
 
+        subroutine to_buffer_d(n0,nlvddi,n,nc,il,nodes,val,nb,buffer)
+
+        integer n0,nlvddi,n,nc
+        integer il(n)
+        integer nodes(nc)
+        double precision val(n0:nlvddi,n)
+        integer nb
+        double precision buffer(:)
+
+        integer i,k,l,lmax
+
+        if( nlvddi == 1 .and. n0 == 1 ) then
+          do i=1,nc
+            k = nodes(i)
+            buffer(i) = val(1,k)
+          end do
+          nb = nc
+        else
+          nb = 0
+          do i=1,nc
+            k = nodes(i)
+            lmax = il(k)
+            do l=n0,lmax
+              nb = nb + 1
+              buffer(nb) = val(l,k)
+            end do
+          end do
+        end if
+
+        end subroutine to_buffer_d
+
+!******************************************************************
+
         subroutine from_buffer_r(n0,nlvddi,n,nc,il,nodes,val,nb,buffer)
 
         integer n0,nlvddi,n,nc
@@ -770,6 +836,40 @@
         end if
 
         end subroutine from_buffer_r
+
+
+!******************************************************************
+
+        subroutine from_buffer_d(n0,nlvddi,n,nc,il,nodes,val,nb,buffer)
+
+        integer n0,nlvddi,n,nc
+        integer il(n)
+        integer nodes(nc)
+        double precision val(n0:nlvddi,n)
+        integer nb
+        double precision buffer(:)
+
+        integer i,k,l,lmax
+
+        if( nlvddi == 1 .and. n0 == 1 ) then
+          do i=1,nc
+            k = nodes(i)
+            val(1,k) = buffer(i)
+          end do
+          nb = nc
+        else
+          nb = 0
+          do i=1,nc
+            k = nodes(i)
+            lmax = il(k)
+            do l=n0,lmax
+              nb = nb + 1
+              val(l,k) = buffer(nb)
+            end do
+          end do
+        end if
+
+        end subroutine from_buffer_d
 
 !******************************************************************
 !******************************************************************
@@ -1125,6 +1225,21 @@
 
 !******************************************************************
 
+	function shympi_max_d(vals)
+
+	double precision shympi_max_d
+	double precision vals(:)
+	double precision val
+
+	val = MAXVAL(vals)
+	call shympi_reduce_d_internal('max',val)
+
+	shympi_max_d = val
+
+	end function shympi_max_d
+
+!******************************************************************
+
 	function shympi_max_i(vals)
 
 	integer shympi_max_i
@@ -1170,6 +1285,21 @@
 
 !******************************************************************
 
+	function shympi_max_0_d(val)
+
+! routine for val that is scalar
+
+	double precision shympi_max_0_d
+	double precision val
+
+	call shympi_reduce_d_internal('max',val)
+
+	shympi_max_0_d = val
+
+	end function shympi_max_0_d
+
+!******************************************************************
+
 	function shympi_sum_r(vals)
 
 	real shympi_sum_r
@@ -1200,6 +1330,22 @@
 
 !******************************************************************
 
+        function shympi_sum_d(vals)
+
+	double precision shympi_sum_d
+	double precision vals(:)
+	double precision val
+
+	val = SUM(vals)
+	call shympi_reduce_d_internal('sum',val)
+
+	shympi_sum_d = val
+
+        end function
+
+
+!******************************************************************
+
 	function shympi_sum_0_r(val)
 
 	real shympi_sum_0_r
@@ -1210,6 +1356,19 @@
 	shympi_sum_0_r = val
 
 	end function shympi_sum_0_r
+
+!******************************************************************
+
+	function shympi_sum_0_d(val)
+
+	double precision shympi_sum_0_d
+	double precision val
+
+	call shympi_reduce_d_internal('sum',val)
+
+	shympi_sum_0_d = val
+
+	end function shympi_sum_0_d
 
 !******************************************************************
 
@@ -1224,44 +1383,6 @@
 
 	end function shympi_sum_0_i
 
-!******************************************************************
-!******************************************************************
-!******************************************************************
-
-	subroutine shympi_exchange_and_sum_3d_nodes_r(a)
-	real a(:,:)
-	end subroutine shympi_exchange_and_sum_3d_nodes_r
-
-	subroutine shympi_exchange_and_sum_3d_nodes_d(a)
-	double precision a(:,:)
-	end subroutine shympi_exchange_and_sum_3d_nodes_d
-
-	subroutine shympi_exchange_and_sum_2d_nodes_r(a)
-	real a(:)
-	end subroutine shympi_exchange_and_sum_2d_nodes_r
-
-	subroutine shympi_exchange_and_sum_2d_nodes_d(a)
-	double precision a(:)
-	end subroutine shympi_exchange_and_sum_2d_nodes_d
-
-	subroutine shympi_exchange_2d_nodes_min_i(a)
-	integer a(:)
-	end subroutine shympi_exchange_2d_nodes_min_i
-
-	subroutine shympi_exchange_2d_nodes_max_i(a)
-	integer a(:)
-	end subroutine shympi_exchange_2d_nodes_max_i
-
-	subroutine shympi_exchange_2d_nodes_min_r(a)
-	real a(:)
-	end subroutine shympi_exchange_2d_nodes_min_r
-
-	subroutine shympi_exchange_2d_nodes_max_r(a)
-	real a(:)
-	end subroutine shympi_exchange_2d_nodes_max_r
-
-!******************************************************************
-!******************************************************************
 !******************************************************************
 
 	function shympi_output()
@@ -1308,19 +1429,246 @@
 
 !******************************************************************
 
-        subroutine check_part_basin(what)
+        subroutine shympi_exchange_2D_nodes_max_i(array)
 
         use basin
 
         implicit none
 
-        character*(5) what
+        integer array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_2D_nodes_max_i
+
+!******************************************************************
+
+        subroutine shympi_exchange_2D_nodes_max_r(array)
+
+        use basin
+
+        implicit none
+
+        real array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_2D_nodes_max_r
+
+!******************************************************************
+
+        subroutine shympi_exchange_2D_nodes_min_i(array)
+
+        use basin
+
+        implicit none
+
+        integer array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_2D_nodes_min_i
+
+!******************************************************************
+
+        subroutine shympi_exchange_2D_nodes_min_r(array)
+
+        use basin
+
+        implicit none
+
+        real array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_2D_nodes_min_r
+
+!******************************************************************
+
+        subroutine shympi_exchange_and_sum_2D_nodes_i(array)
+
+        use basin
+
+        implicit none
+
+        integer array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_and_sum_2D_nodes_i
+
+!******************************************************************
+
+        subroutine shympi_exchange_and_sum_2D_nodes_r(array)
+
+        use basin
+
+        implicit none
+
+        real array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_and_sum_2D_nodes_r
+
+!******************************************************************
+
+        subroutine shympi_exchange_and_sum_2D_nodes_d(array)
+
+        use basin
+
+        implicit none
+
+        double precision array(nkn)
+
+        return
+
+        end subroutine shympi_exchange_and_sum_2D_nodes_d
+
+!******************************************************************
+
+        subroutine shympi_exchange_and_sum_3D_nodes_r(array)
+
+        use basin
+        use levels
+
+        implicit none
+
+        real array(nlvdi,nkn)
+
+        return
+
+        end subroutine shympi_exchange_and_sum_3D_nodes_r
+
+
+!******************************************************************
+
+        subroutine shympi_exchange_and_sum_3D_nodes_d(array)
+
+        use basin
+        use levels
+
+        implicit none
+
+        double precision array(nlvdi,nkn)
+
+        return
+
+        end subroutine shympi_exchange_and_sum_3D_nodes_d
+
+!******************************************************************
+
+        subroutine send_halo_r(array,dim2,dim1,what)
+
+        implicit none
+
+        integer dim2,dim1
+        real array(dim2,dim1)
+        character*(2) what
+
+        end subroutine send_halo_r
+
+!******************************************************************
+
+        subroutine recv_halo_r(array,dim2,dim1,what)
+
+
+         implicit none
+
+         integer dim2, dim1
+         real array(dim2,dim1)
+         character*(2) what
+
+       end subroutine
+
+!******************************************************************
+
+        subroutine send_halo_d(array,dim2,dim1)
+
+        implicit none
+
+        integer dim2,dim1
+        double precision array(dim2,dim1)
+
+
+        end subroutine send_halo_d
+
+!******************************************************************
+
+        subroutine recv_halo_d(array,dim2,dim1)
+
+
+         implicit none
+
+         integer dim2, dim1
+         double precision array(dim2,dim1)
+
+       end subroutine
+
+!******************************************************************
+
+        subroutine make_aux(auxv,ieltv)
+
+! make auxv_iei (auxiliary vector) 
+
+        use basin
+
+        implicit none
+
+! arguments
+        integer auxv(3,nel)
+        integer ieltv(3,nel)
+
+! local
+        integer ie,k,ieiGID,j
+
+        if(bmpi) then
+          do ie=1,nel
+            do k=1,3
+              auxv(k,ie) = ieltv(k,ie)
+              if(auxv(k,ie) .le. 0) then
+                !CHANGE THE CODE FOR PARTITIONING ON NODES
+                !replace the following lines of code by considering the nodes
+                !partitioning case
+ 
+                  !ieiGID=total_ieltv(k,myele%globalID(ie)) ! global id for iei by the global ieltv structure
+                  !do j=myele%numberID+1,myele%totalID      ! j is the local id of my neighbor (in the halo)
+                  !  if(myele%globalID(j) .eq. ieiGID) then
+                  !    auxv(k,ie) = j
+                  !    exit
+                  !  end if
+                  !end do
+              end if
+            end do
+          end do
+        else
+          do ie=1,nel
+            do k=1,3
+              auxv(k,ie) = ieltv(k,ie)
+            end do
+          end do
+        end if
+
+        return
+
+        end subroutine
+
+!******************************************************************
+
+        subroutine check_part_basin
+
+        use basin
+
+        implicit none
+
+        character*(10) what
         integer pnkn,pnel,pn_threads,ierr
         integer control
         character*(14) filename
-        character*(11) pwhat
+        character*(10) pwhat
         integer i
 
+        what='nodes'
         call shympi_get_filename(filename,what)
 
         write(6,*),filename,what
@@ -1394,7 +1742,7 @@
 
         end subroutine shympi_get_filename
 
-
+!==================================================================
 !==================================================================
         end module shympi
 !==================================================================

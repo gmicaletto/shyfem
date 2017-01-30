@@ -35,9 +35,10 @@
 	contains
 !==================================================================
 
-        subroutine mod_hydro_init(nkn,nel,nlv)
-        
+        subroutine mod_hydro_init(nkn,nel,nlv,nel_glob)
+       
         integer nkn, nel, nlv
+        integer, optional :: nel_glob !local domain + halo for mpi domain
         
         if( nkn == nkn_hydro .and. nel == nel_hydro .and.
      +      nlv == nlv_hydro ) return
@@ -74,10 +75,17 @@
         allocate(zeov(3,nel))
         allocate(zenv(3,nel))
 
-        allocate(utlov(nlv,nel))
-        allocate(utlnv(nlv,nel))
-        allocate(vtlov(nlv,nel))
-        allocate(vtlnv(nlv,nel))
+        if(present(nel_glob)) then
+          allocate(utlov(nlv,nel_glob))
+          allocate(utlnv(nlv,nel_glob))
+          allocate(vtlov(nlv,nel_glob))
+          allocate(vtlnv(nlv,nel_glob))
+        else
+          allocate(utlov(nlv,nel))
+          allocate(utlnv(nlv,nel))
+          allocate(vtlov(nlv,nel))
+          allocate(vtlnv(nlv,nel))
+        end if
 
 	zov = 0.
 	znv = 0.

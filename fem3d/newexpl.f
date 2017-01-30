@@ -153,6 +153,7 @@ c stability is computed for dt == 1
 	use evgeom
 	use levels
 	use basin
+        use shympi
 
 	implicit none
 
@@ -184,7 +185,8 @@ c stability is computed for dt == 1
 	    a = 0.
 	    r = 0.
 	    do ii=1,3
-              iei = ieltv(ii,ie)
+
+              iei = auxv_iei(ii,ie)
 	      k = nen3v(ii,ie)
               if( iei .le. 0 ) iei = ie
 
@@ -220,6 +222,7 @@ c******************************************************************
 	use evgeom
 	use levels
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
 
 	implicit none
 
@@ -244,6 +247,11 @@ c******************************************************************
 
 	amax = 0.
 
+        if(shympi_partition_on_elements()) then
+          call recv_halo(utlov,nlvdi,nel_global,'ut')
+          call recv_halo(vtlov,nlvdi,nel_global,'vt')
+        end if
+
 	do ie=1,nel
 
 	  lmax = ilhv(ie)
@@ -255,7 +263,9 @@ c******************************************************************
 
 	    a = 0.
 	    do ii=1,3
-              iei = ieltv(ii,ie)
+
+              iei = auxv_iei(ii,ie)
+
               afact = 1.
               if( bnoslip .and. iei .eq. 0 ) afact = -1.
               if( iei .le. 0 ) iei = ie
@@ -298,6 +308,7 @@ c sets arrays momentx/yv
 	use evgeom
 	use levels
 	use basin
+        use shympi
 
         implicit none
 
@@ -312,6 +323,8 @@ c sets arrays momentx/yv
 	real area,vol
 
 	real saux(nlvdi,nkn)
+
+        include 'femtime.h'
 
 c---------------------------------------------------------------
 c initialization
@@ -344,6 +357,13 @@ c---------------------------------------------------------------
 	    end do
           end do
 	end do
+
+        if(shympi_partition_on_elements()) then
+          call shympi_exchange_and_sum_3D_nodes(saux) 
+          call shympi_exchange_and_sum_3D_nodes(momentxv) 
+          call shympi_exchange_and_sum_3D_nodes(momentyv) 
+          !call shympi_comment('shympi_elem: exchange momentv,saux')
+        end if
 
 c---------------------------------------------------------------
 c compute average momentum for every node

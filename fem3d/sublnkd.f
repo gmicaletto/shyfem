@@ -43,6 +43,7 @@ c update ieltv
 c-------------------------------------------------------------
 
         call update_ielt(nel,inodv,ieltv)
+        call make_aux(auxv_iei,ieltv)
 
 	return
 

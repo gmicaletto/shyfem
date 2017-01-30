@@ -320,8 +320,11 @@
      +						,g_in,g_out,val)
 
 	use shympi_aux
+
 	use shympi
-	
+
+	implicit none
+
 	logical belem
 	integer n0,nlvddi,n
 	integer il(n)
@@ -329,10 +332,56 @@
 	integer g_out(n_ghost_max,n_ghost_areas)
 	double precision val(n0:nlvddi,n)
 
-        stop 'error stop shympi_exchange_internal_d: not ready'
+	integer tag,ir,ia,id
+	integer i,k,nc,ierr
+	integer nb
+	integer iout,iin
+
+        tag=1234
+	ir = 0
+
+	iout = 2
+	iin = 3
+	if( belem ) then
+	  iout = 4
+	  iin = 4
+	end if
+
+	nb = (nlvddi-n0+1) * n_ghost_max
+	call shympi_alloc_buffer(nb)
+
+	do ia=1,n_ghost_areas
+	  ir = ir + 1
+	  id = ghost_areas(1,ia)
+	  nc = ghost_areas(iout,ia)
+	  call count_buffer(n0,nlvddi,n,nc,il,g_out(:,ia),nb)
+	  !write(6,*) 'ex1: ',my_id,ia,id,nc,n,nb
+          call MPI_Irecv(d_buffer_out(:,ia),nb,MPI_DOUBLE_PRECISION,id
+     +	          ,tag,MPI_COMM_WORLD,request(ir),ierr)
+	end do
+
+	do ia=1,n_ghost_areas
+	  ir = ir + 1
+	  id = ghost_areas(1,ia)
+	  nc = ghost_areas(iin,ia)
+	  call to_buffer_d(n0,nlvddi,n,nc,il
+     +		,g_in(:,ia),val,nb,d_buffer_in(:,ia))
+          call MPI_Isend(d_buffer_in(:,ia),nb,MPI_DOUBLE_PRECISION,id
+     +	          ,tag,MPI_COMM_WORLD,request(ir),ierr)
+	end do
+
+        call MPI_WaitAll(ir,request,status,ierr)
+
+	do ia=1,n_ghost_areas
+	  id = ghost_areas(1,ia)
+	  nc = ghost_areas(iout,ia)
+	  call from_buffer_d(n0,nlvddi,n,nc,il
+     +		,g_out(:,ia),val,nb,d_buffer_out(:,ia))
+	end do
 
 	end subroutine shympi_exchange_internal_d
 
+!******************************************************************
 !******************************************************************
 !******************************************************************
 !******************************************************************
@@ -403,6 +452,39 @@
         end if
 
 	end subroutine shympi_reduce_r_internal
+
+!*******************************
+
+	subroutine shympi_reduce_d_internal(what,val)
+
+	use shympi_aux
+
+	implicit none
+
+	character*(*) what
+	double precision val
+
+        integer ierr
+	double precision valout
+
+        if( what == 'min' ) then
+	  call MPI_ALLREDUCE(val,valout,1,MPI_DOUBLE_PRECISION,MPI_MIN
+     +				,MPI_COMM_WORLD,ierr)
+	  val = valout
+        else if( what == 'max' ) then
+	  call MPI_ALLREDUCE(val,valout,1,MPI_DOUBLE_PRECISION,MPI_MAX
+     +				,MPI_COMM_WORLD,ierr)
+	  val = valout
+        else if( what == 'sum' ) then
+	  call MPI_ALLREDUCE(val,valout,1,MPI_DOUBLE_PRECISION,MPI_SUM
+     +				,MPI_COMM_WORLD,ierr)
+	  val = valout
+        else
+          write(6,*) 'what = ',what
+          stop 'error stop shympi_reduce_d_internal: not ready'
+        end if
+
+	end subroutine shympi_reduce_d_internal
 
 !******************************************************************
 

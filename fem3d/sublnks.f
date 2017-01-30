@@ -103,17 +103,15 @@ c statement functions
           if( iskins(k) ) nnkn=nnkn+1
         end do
 
-        nnbn = shympi_sum(nnbn)
-        nnod = shympi_sum(nnod)
-        nnkn = shympi_sum(nnkn)
-
         nnel=0
         do ie=1,nel
           if( iseins(ie) ) nnel=nnel+1
         end do
 
         nnel = shympi_sum(nnel)
-        !call shympi_comment('shympi_sum(nnbn,nnod,nnkn,nnel)')
+        nnbn = shympi_sum(nnbn)
+        nnod = shympi_sum(nnod)
+        nnkn = shympi_sum(nnkn)
 
         nnis=(nnel+nnbn-2*nnkn+2+nnod)/2
         nnli=(3*nnel+nnbn+nnod)/2
@@ -155,6 +153,10 @@ c save
 
         call setnar(nnar)	!number of areas
         call setwnk(wink)	!total angle at boundary nodes
+
+        if(bmpi) then
+          nnar = shympi_min(nnar) !- n_threads
+        end if
 
         nnnis = iround( (wink-nnbn*180.)/360. ) + nnar
 
@@ -269,8 +271,10 @@ c
           write(6,*)
         end if
 
-        nar = shympi_min(nar)
-        !call shympi_comment('shympi_min(nar)')
+        !if(bmpi) then
+        !nar = shympi_min(nar) !- n_threads
+        !call shympi_comment('shympi_sum(nar)')
+        !end if
 
         do ie=1,nel
           if(iwegv(ie).lt.3) then

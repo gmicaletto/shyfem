@@ -96,6 +96,8 @@ c----------------------------------------------------------------------
 
         subroutine mod_bound_geom_reinit(nkn,nrb)
 
+        use shympi
+
         integer nkn
         integer nrb
 
@@ -109,7 +111,9 @@ c----------------------------------------------------------------------
 	allocate(irv_aux(nrb))
 	irv_aux(1:nrb) = irv(1:nrb)
 
-	write(6,*) 'mod_bound_geom_reinit: ',nkn,nrb,nrb_bound_geom
+        if(shympi_is_master()) then
+	  write(6,*) 'mod_bound_geom_reinit: ',nkn,nrb,nrb_bound_geom
+        end if
 
 	nrb_bound_geom = 0
 	deallocate(irv)

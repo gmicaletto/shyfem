@@ -21,6 +21,7 @@
 	integer, allocatable, save :: kantv(:,:)
 	real, allocatable, save :: dxv(:)
 	real, allocatable, save :: dyv(:)
+        integer, allocatable, save :: auxv_iei(:,:)
 
 !==================================================================
 	contains
@@ -51,6 +52,7 @@
           deallocate(kantv)
           deallocate(dxv)
           deallocate(dyv)
+          deallocate(auxv_iei)
         end if
 
 	nlk = 3*nel + 2*nkn
@@ -71,6 +73,7 @@
         allocate(kantv(2,nkn))
         allocate(dxv(nkn))
         allocate(dyv(nkn))
+        allocate(auxv_iei(3,nel))
 
 	end subroutine mod_geom_init
 

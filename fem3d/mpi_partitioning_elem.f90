@@ -8,6 +8,8 @@
 
     implicit none
 
+    include 'param.h'
+
     real(Zoltan_FLOAT) :: version
 
     integer i, j, k, id, numGlobalNeighbors, numGlobalVertices, nnbors, procID, num, nbr
@@ -126,7 +128,7 @@
         send_graph(procID)%numMyVertices = send_graph(procID)%numMyVertices + 1
       end do
 
-      allocate(idx(n_threads))
+      allocate(idx(n_threads), STAT = ierr)
 
       do i=1, n_threads
         idx(i) = 0
@@ -290,7 +292,7 @@
 
     if(ierr .ne. ZOLTAN_OK) then
        write(6,*)'sorry...'
-       call MPI_FINALIZE()
+       call MPI_FINALIZE(ierr)
        stop
     end if
 
@@ -346,7 +348,7 @@
       write(6,*)'greatest number of elements for domain',maxNel
     end if
 
-    if(minNel .le. 0) then
+    if(minNel .le. 20) then
       if(my_id .eq. 0) then
         write(6,*)'tried partitioning with',n_threads,' processes'
         write(6,*)'process with zero elements found:'
@@ -397,7 +399,7 @@
 
       if(ierr .ne. ZOLTAN_OK) then
         write(6,*)'sorry...'
-        call MPI_FINALIZE()
+        call MPI_FINALIZE(ierr)
         stop
       end if
 
@@ -451,7 +453,7 @@
         write(6,*)'greatest number of elements for domain',maxNel
       end if
 
-      if(minNel .le. 0) then
+      if(minNel .le. 20) then
         if(my_id .eq. 0) then
           write(6,*)'tried partitioning with',n_threads,' processes'
           write(6,*)'too many processes for the basin, try a smaller number of processes'
@@ -492,7 +494,7 @@
       end if
 
       open(unit=1500, file=filename, action='write')
-        write(1500,*),nkndi,neldi,n_threads,what
+        write(1500,fmt='(i12,i12,i12,A10)'),nkndi,neldi,n_threads,what
         write(1500,fmt="(i12,i12,i12,i12,i12,i12)"),allPartAssign
       close(1500)
     end if

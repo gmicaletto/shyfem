@@ -135,6 +135,7 @@ c----------------------------------------------------------------
 	use coordinates
 	use mod_subset
 	use shympi
+        use mod_petsc
 !$	use omp_lib	!ERIC
 
 c----------------------------------------------------------------
@@ -157,7 +158,7 @@ c local variables
         double precision mpi_t_start, mpi_t_end
         double precision parallel_start
 
-	real getpar
+	real getpar,ahpar
 
 	bdebout = .false.
 
@@ -187,8 +188,12 @@ c-----------------------------------------------------------
 	call shympi_init(.true.)
 
         mpi_t_start = shympi_wtime()
-	call shympi_setup			!sets up partitioning of basin
+        if(bmpi) then
+	  call shympi_setup			!sets up partitioning of basin
+        end if
         parallel_start = shympi_wtime()
+
+        call petsc_init(nkndi,nkn_inner)
 
 	call allocate_2d_arrays
 
@@ -213,12 +218,14 @@ c-----------------------------------------------------------
 
 	call set_spherical
 	call set_ev
+	call send_halo(ev,evdim,nel_global)
 	call adjust_spherical
 	call print_spherical
 	call handle_projection
 	call set_geom
 	call domain_clusterization
-
+	call recv_halo(ev,evdim,nel_global)
+        
 c-----------------------------------------------------------
 c inititialize time independent vertical arrays
 c-----------------------------------------------------------
@@ -241,7 +248,7 @@ c-----------------------------------------------------------
 
 	call setnod
 	call update_geom	!update ieltv - needs inodv
-
+        
 c-----------------------------------------------------------
 c initialize boundary conditions
 c-----------------------------------------------------------
@@ -344,6 +351,13 @@ c-----------------------------------------------------------
 
 	if( bdebout ) call debug_output(it)
 
+        ahpar = getpar('ahpar')
+
+        if(shympi_partition_on_elements() .and. ahpar .gt. 0) then
+          call send_halo(utlov,nlvdi,nel_global,'ut')
+          call send_halo(vtlov,nlvdi,nel_global,'vt')
+        end if
+
 c%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 c%%%%%%%%%%%%%%%%%%%%%%%%% time loop %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 c%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -381,7 +395,7 @@ c%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	   call hydro			!hydro
 
-	   !call wrfvla			!write finite volume - shympi FIXME
+	   call wrfvla			!write finite volume - shympi FIXME
 
 	   call scalar
 
@@ -461,6 +475,7 @@ c%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         write(6,*)'MPI_TIME =',mpi_t_end-mpi_t_start,my_id
         write(6,*)'Parallel_TIME =',mpi_t_end-parallel_start,my_id
 
+        call petsc_final
 	call shympi_finalize
 	call exit(99)
 
@@ -640,6 +655,7 @@ c*****************************************************************
 	use tidef
 	use coordinates
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
 
 	implicit none
 
@@ -659,12 +675,14 @@ c*****************************************************************
 
 	call mod_depth_init(nkn,nel)
 
-	call ev_init(nel)
+	!call ev_init(nel)
+	call ev_init(nel_global)
 
 	call mod_tvd_init(nel)
 
-	write(6,*) '2D arrays allocated: ',nkn,nel,ngr
-
+        if (shympi_is_master()) then
+	  write(6,*) '2D arrays allocated: ',nkn,nel,ngr
+        end if
 	end
 
 c*****************************************************************
@@ -691,6 +709,7 @@ c*****************************************************************
 	use mod_hydro
 	use levels, only : nlvdi,nlv
 	use basin, only : nkn,nel,ngr,mbw
+        use shympi
 
 	implicit none
 
@@ -698,7 +717,7 @@ c*****************************************************************
 
 	nlvddi = nlvdi
 
-	call mod_hydro_init(nkn,nel,nlvddi)
+	call mod_hydro_init(nkn,nel,nlvddi,nel_global)
 	call mod_hydro_vel_init(nkn,nel,nlvddi)
 	call mod_hydro_print_init(nkn,nlvddi)
 
